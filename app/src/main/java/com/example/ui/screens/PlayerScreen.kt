@@ -20,11 +20,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -122,6 +127,7 @@ fun PlayerScreen(
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
     
     var showControls by remember { mutableStateOf(true) }
+    var showChannelList by remember { mutableStateOf(false) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
 
@@ -452,6 +458,17 @@ fun PlayerScreen(
                         tint = Color.White
                     )
                 }
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = { showChannelList = true },
+                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.List,
+                        contentDescription = stringResource(R.string.channel_list),
+                        tint = Color.White
+                    )
+                }
             }
         }
 
@@ -539,6 +556,61 @@ fun PlayerScreen(
                 color = Color.White
             )
         }
+    }
+
+    // ---------- Channel list dialog ----------
+    if (showChannelList) {
+        AlertDialog(
+            onDismissRequest = { showChannelList = false },
+            title = {
+                Text(stringResource(R.string.channel_list), fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
+                    LazyColumn(
+                        state = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0)),
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
+                            val isCurrent = index == currentIndex
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = ch.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
+                                supportingContent = { Text(ch.groupTitle, style = MaterialTheme.typography.labelSmall) },
+                                trailingContent = {
+                                    if (isCurrent) {
+                                        Icon(
+                                            imageVector = Icons.Filled.CheckCircle,
+                                            contentDescription = stringResource(R.string.selected),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                                ),
+                                modifier = Modifier.clickable {
+                                    currentIndex = index
+                                    showChannelList = false
+                                    showControls = true
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showChannelList = false }) {
+                    Text(stringResource(R.string.close))
+                }
+            }
+        )
     }
 }
 

@@ -122,4 +122,5 @@
     <string name="next_channel">Next channel</string>
     <string name="epg_now">Now: %1$s</string>
     <string name="epg_next">Next: %1$s</string>
+    <string name="channel_list">Channel list</string>
 </resources>

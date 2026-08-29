@@ -101,8 +101,14 @@ class EditorViewModel : ViewModel() {
             .build()
     }
 
+    /** Derived group list: only recomputed when channels or custom groups actually change
+     *  (not on every UI state emission, which made big playlists sluggish). */
+    private val _groups: StateFlow<List<String>> = combine(_channels, _customGroups) { channels, customGroups ->
+        (channels.map { it.groupTitle } + customGroups).distinct().sorted()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val state: StateFlow<EditorState> = combine(
-        _playlists, _activePlaylistId, _channels, _isLoading, _selectedGroup, _searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName
+        _playlists, _activePlaylistId, _channels, _isLoading, _selectedGroup, _searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups, _groups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         val playlists = args[0] as List<SavedPlaylist>
@@ -119,13 +125,14 @@ class EditorViewModel : ViewModel() {
         val error = args[8] as String?
         @Suppress("UNCHECKED_CAST")
         val customGroups = args[9] as Set<String>
-        val playerMode = args[10] as DefaultPlayerMode
-        val extPkg = args[11] as String?
-        val extAct = args[12] as String?
-        val extName = args[13] as String?
+        @Suppress("UNCHECKED_CAST")
+        val allGroups = args[10] as List<String>
+        val playerMode = args[11] as DefaultPlayerMode
+        val extPkg = args[12] as String?
+        val extAct = args[13] as String?
+        val extName = args[14] as String?
 
         val activeName = playlists.find { it.id == activeId }?.name ?: ""
-        val allGroups = (channels.map { it.groupTitle } + customGroups).distinct().sorted()
 
         EditorState(
             playlists = playlists,

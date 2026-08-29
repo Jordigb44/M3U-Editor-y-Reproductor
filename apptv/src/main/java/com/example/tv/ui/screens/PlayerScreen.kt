@@ -14,11 +14,16 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -148,6 +154,7 @@ fun PlayerScreen(
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
     var seekFeedback by remember { mutableStateOf<String?>(null) }
     var channelBanner by remember { mutableStateOf<String?>(null) }
+    var showChannelList by remember { mutableStateOf(false) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
 
@@ -355,44 +362,59 @@ fun PlayerScreen(
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyDown) {
-                    showControls = true
-                    when (keyEvent.key) {
-                        Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-                            togglePlay()
-                            true
-                        }
-                        Key.MediaPlay -> {
-                            player.play()
-                            true
-                        }
-                        Key.MediaPause -> {
-                            player.pause()
-                            true
-                        }
-                        Key.DirectionLeft -> {
-                            seekRelative(-SEEK_STEP_MS)
-                            true
-                        }
-                        Key.DirectionRight -> {
-                            seekRelative(SEEK_STEP_MS)
-                            true
-                        }
-                        Key.DirectionUp, Key.PageUp, Key.VolumeDown -> {
-                            switchChannel(-1)
-                            true
-                        }
-                        Key.DirectionDown, Key.PageDown, Key.VolumeUp -> {
-                            switchChannel(1)
-                            true
-                        }
+                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+
+                // Channel list overlay: only Back closes it; the list handles the rest.
+                if (showChannelList) {
+                    return@onKeyEvent when (keyEvent.key) {
                         Key.Back, Key.Escape -> {
-                            onBack()
+                            showChannelList = false
                             true
                         }
                         else -> false
                     }
-                } else false
+                }
+
+                // Seek only while the controls are hidden: with the control bar visible,
+                // left/right move focus between the buttons instead of seeking.
+                if (!showControls && (keyEvent.key == Key.DirectionLeft || keyEvent.key == Key.DirectionRight)) {
+                    showControls = true
+                    if (keyEvent.key == Key.DirectionLeft) {
+                        seekRelative(-SEEK_STEP_MS)
+                    } else {
+                        seekRelative(SEEK_STEP_MS)
+                    }
+                    return@onKeyEvent true
+                }
+
+                showControls = true
+                when (keyEvent.key) {
+                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
+                        togglePlay()
+                        true
+                    }
+                    Key.MediaPlay -> {
+                        player.play()
+                        true
+                    }
+                    Key.MediaPause -> {
+                        player.pause()
+                        true
+                    }
+                    Key.DirectionUp, Key.PageUp, Key.VolumeDown -> {
+                        switchChannel(-1)
+                        true
+                    }
+                    Key.DirectionDown, Key.PageDown, Key.VolumeUp -> {
+                        switchChannel(1)
+                        true
+                    }
+                    Key.Back, Key.Escape -> {
+                        onBack()
+                        true
+                    }
+                    else -> false
+                }
             }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -665,6 +687,13 @@ fun PlayerScreen(
                                 contentDescription = stringResource(R.string.play_with_external_app),
                                 onClick = { launchExternalPlayer(context, channel.url, channel.name) }
                             )
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            ControlButton(
+                                icon = Icons.Filled.List,
+                                contentDescription = stringResource(R.string.tv_channel_list),
+                                onClick = { showChannelList = true }
+                            )
                         }
                     }
                 }
@@ -782,6 +811,135 @@ fun PlayerScreen(
                             Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.player_try_external_app), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------- Channel list overlay ----------
+        if (showChannelList) {
+            ChannelListOverlay(
+                channels = channels,
+                currentIndex = currentIndex,
+                epgNow = { ch -> epgNowNextFor(ch)?.first?.title },
+                onSelect = { index ->
+                    currentIndex = index
+                    showChannelList = false
+                    showControls = true
+                },
+                onDismiss = { showChannelList = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelListOverlay(
+    channels: List<Channel>,
+    currentIndex: Int,
+    epgNow: (Channel) -> String?,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
+    val currentFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        listState.scrollToItem(currentIndex.coerceAtLeast(0))
+        currentFocusRequester.requestFocus()
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Black.copy(alpha = 0.92f),
+        contentColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 28.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.tv_channel_list_count, channels.size),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.tvFocusable()
+                ) {
+                    Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
+                }
+            }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp)
+            ) {
+                itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
+                    val isCurrent = index == currentIndex
+                    Surface(
+                        onClick = { onSelect(index) },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        border = if (isCurrent) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (isCurrent) Modifier.focusRequester(currentFocusRequester) else Modifier)
+                            .tvFocusable(shape = RoundedCornerShape(14.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = (index + 1).toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(52.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = ch.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                val now = epgNow(ch)
+                                if (now != null) {
+                                    Text(
+                                        text = stringResource(R.string.epg_now, now),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            if (ch.groupTitle.isNotBlank()) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = ch.groupTitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.width(200.dp)
+                                )
+                            }
                         }
                     }
                 }

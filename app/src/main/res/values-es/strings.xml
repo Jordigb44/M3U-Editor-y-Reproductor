@@ -122,4 +122,5 @@
     <string name="next_channel">Canal siguiente</string>
     <string name="epg_now">Ahora: %1$s</string>
     <string name="epg_next">Sigue: %1$s</string>
+    <string name="channel_list">Lista de canales</string>
 </resources>

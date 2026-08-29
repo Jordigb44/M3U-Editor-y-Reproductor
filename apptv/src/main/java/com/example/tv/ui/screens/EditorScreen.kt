@@ -128,11 +128,17 @@ fun EditorScreen(
 
     BackHandler { handleBack() }
 
-    val filteredChannels = state.channels.filter {
-        (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
-            it.matchesSearch(state.searchQuery)
+    // Memoized so large playlists don't re-filter on every recomposition.
+    val filteredChannels = remember(state.channels, state.selectedGroup, state.searchQuery) {
+        state.channels.filter {
+            (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
+                it.matchesSearch(state.searchQuery)
+        }
     }
-    val filteredChannelIds = filteredChannels.map { it.id }
+    val filteredChannelIds = remember(filteredChannels) { filteredChannels.map { it.id } }
+    val groupCounts = remember(state.channels) {
+        state.channels.groupingBy { it.groupTitle }.eachCount()
+    }
 
     fun handleChannelClick(channel: Channel) {
         when (state.defaultPlayerMode) {
@@ -321,7 +327,7 @@ fun EditorScreen(
                             items(state.groups, key = { it }) { group ->
                                 GroupChip(
                                     label = group,
-                                    count = state.channels.count { it.groupTitle == group },
+                                    count = groupCounts[group] ?: 0,
                                     selected = state.selectedGroups.contains(group),
                                     onClick = { viewModel.toggleGroupSelection(group) }
                                 )
@@ -390,7 +396,7 @@ fun EditorScreen(
                             items(state.groups, key = { it }) { group ->
                                 GroupChip(
                                     label = group,
-                                    count = state.channels.count { it.groupTitle == group },
+                                    count = groupCounts[group] ?: 0,
                                     selected = state.selectedGroup == group,
                                     onClick = { viewModel.selectGroup(group) }
                                 )

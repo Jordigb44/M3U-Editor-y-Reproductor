@@ -131,9 +131,11 @@ fun EditorScreen(
                     },
                     actions = {
                         if (selectedTab == 0) {
-                            val filteredChannels = state.channels.filter {
-                                (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
-                                it.matchesSearch(state.searchQuery)
+                            val filteredChannels = remember(state.channels, state.selectedGroup, state.searchQuery) {
+                                state.channels.filter {
+                                    (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
+                                        it.matchesSearch(state.searchQuery)
+                                }
                             }
                             val allSelected = filteredChannels.isNotEmpty() && filteredChannels.all { state.selectedChannelIds.contains(it.id) }
                             
@@ -316,9 +318,11 @@ fun ChannelsTab(
     val defaultGroupText = stringResource(R.string.all_groups)
     val currentGroupText = state.selectedGroup ?: defaultGroupText
 
-    val filteredChannels = state.channels.filter {
-        (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
-            it.matchesSearch(state.searchQuery)
+    val filteredChannels = remember(state.channels, state.selectedGroup, state.searchQuery) {
+        state.channels.filter {
+            (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
+                it.matchesSearch(state.searchQuery)
+        }
     }
 
     fun handleChannelClick(channel: Channel) {
@@ -582,6 +586,9 @@ fun GroupsTab(state: EditorState, viewModel: EditorViewModel) {
         }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            val groupCounts = remember(state.channels) {
+                state.channels.groupingBy { it.groupTitle }.eachCount()
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -589,7 +596,7 @@ fun GroupsTab(state: EditorState, viewModel: EditorViewModel) {
             ) {
                 items(state.groups, key = { it }) { group ->
                     val isSelected = state.selectedGroups.contains(group)
-                    val channelCount = state.channels.count { it.groupTitle == group }
+                    val channelCount = groupCounts[group] ?: 0
                     
                     ListItem(
                         headlineContent = { Text(group, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium) },

@@ -137,4 +137,6 @@
     <string name="tv_epg_loading">Cargando guía…</string>
     <string name="epg_now">Ahora: %1$s</string>
     <string name="epg_next">Sigue: %1$s</string>
+    <string name="tv_channel_list">LISTA DE CANALES</string>
+    <string name="tv_channel_list_count">CANALES (%1$d)</string>
 </resources>
