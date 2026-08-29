@@ -883,11 +883,17 @@ private fun ChannelListOverlay(
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
+    // Show only the channels of the group the current channel belongs to (zapping within
+    // the group); when the channel has no group, show the whole list.
+    val currentGroup = channels.getOrNull(currentIndex)?.groupTitle?.takeIf { it.isNotBlank() }
+    val displayChannels = if (currentGroup != null) channels.filter { it.groupTitle == currentGroup } else channels
+    val displayIndex = displayChannels.indexOfFirst { it.id == channels.getOrNull(currentIndex)?.id }.coerceAtLeast(0)
+
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = displayIndex)
     val currentFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        listState.scrollToItem(currentIndex.coerceAtLeast(0))
+        listState.scrollToItem(displayIndex)
         currentFocusRequester.requestFocus()
     }
 
@@ -913,7 +919,11 @@ private fun ChannelListOverlay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.tv_channel_list_count, channels.size),
+                        text = if (currentGroup != null) {
+                            currentGroup + " · " + stringResource(R.string.tv_channel_list_count, displayChannels.size)
+                        } else {
+                            stringResource(R.string.tv_channel_list_count, displayChannels.size)
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -934,11 +944,11 @@ private fun ChannelListOverlay(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
                 ) {
-                    itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
-                        val isCurrent = index == currentIndex
+                    itemsIndexed(displayChannels, key = { _, ch -> ch.id }) { index, ch ->
+                        val isCurrent = index == displayIndex
                         val epg = epgNow(ch)
                         Surface(
-                            onClick = { onSelect(index) },
+                            onClick = { onSelect(channels.indexOfFirst { it.id == ch.id }) },
                             shape = RoundedCornerShape(14.dp),
                             color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                             border = if (isCurrent) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
