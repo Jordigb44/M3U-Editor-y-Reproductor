@@ -128,4 +128,8 @@
     <string name="tv_group_multiselect_hint">Pulsa OK en cada grupo para seleccionarlo</string>
     <string name="tv_groups_selected_count">%1$d grupos seleccionados</string>
     <string name="tv_delete_groups_confirm">¿Eliminar %1$d grupos y todos sus canales?</string>
+    <string name="tv_channel_multiselect">SELECCIÓN MÚLTIPLE</string>
+    <string name="tv_channel_multiselect_hint">Pulsa OK en cada canal para seleccionarlo</string>
+    <string name="tv_channels_selected_count">%1$d canales seleccionados</string>
+    <string name="tv_delete_channels_confirm">¿Eliminar %1$d canales seleccionados?</string>
 </resources>

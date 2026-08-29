@@ -98,6 +98,7 @@ fun EditorScreen(
     var selectMode by remember { mutableStateOf(false) }
     var groupSelectMode by remember { mutableStateOf(false) }
     var showDeleteGroupsConfirm by remember { mutableStateOf(false) }
+    var showDeleteChannelsConfirm by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showPlayerSettingsDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
@@ -113,6 +114,8 @@ fun EditorScreen(
             playingChannel = null
         } else if (state.selectedChannelIds.isNotEmpty()) {
             viewModel.clearSelection()
+        } else if (selectMode) {
+            selectMode = false
         } else if (state.selectedGroups.isNotEmpty()) {
             viewModel.clearGroupSelection()
         } else if (groupSelectMode) {
@@ -220,59 +223,25 @@ fun EditorScreen(
                     )
                 }
 
-                if (state.selectedChannelIds.isNotEmpty()) {
-                    IconButton(
-                        onClick = { viewModel.deleteSelectedChannels(context) },
-                        modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { showMoveDialog = true },
-                        modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                            contentDescription = stringResource(R.string.move),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.clearSelection() },
-                        modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.clear_selection),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = { showExportDialog = true },
-                        modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.SaveAlt,
-                            contentDescription = stringResource(R.string.export),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { showPlayerSettingsDialog = true },
-                        modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Tune,
-                            contentDescription = stringResource(R.string.editor_default_player),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
+                IconButton(
+                    onClick = { showExportDialog = true },
+                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SaveAlt,
+                        contentDescription = stringResource(R.string.export),
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                IconButton(
+                    onClick = { showPlayerSettingsDialog = true },
+                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Tune,
+                        contentDescription = stringResource(R.string.editor_default_player),
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             }
 
@@ -464,6 +433,46 @@ fun EditorScreen(
                         .fillMaxHeight()
                         .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = 16.dp)
                 ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(R.string.channels_count, filteredChannels.size),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        FilterChip(
+                            selected = selectMode,
+                            onClick = {
+                                selectMode = !selectMode
+                                if (!selectMode) viewModel.clearSelection()
+                            },
+                            label = { Text(stringResource(R.string.tv_channel_multiselect), style = MaterialTheme.typography.labelMedium) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (selectMode) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(16.dp))
+                        )
+                    }
+
+                    if (selectMode) {
+                        Text(
+                            text = stringResource(R.string.tv_channel_multiselect_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                    }
+
                     if (searchVisible) {
                         Row(
                             modifier = Modifier
@@ -496,30 +505,100 @@ fun EditorScreen(
                         }
                     }
 
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)
-                    ) {
-                        items(filteredChannels, key = { it.id }) { channel ->
-                            ChannelRow(
-                                channel = channel,
-                                isSelected = state.selectedChannelIds.contains(channel.id),
-                                onClick = {
-                                    if (selectMode || state.selectedChannelIds.isNotEmpty()) {
-                                        viewModel.toggleChannelSelection(channel.id)
-                                    } else {
-                                        handleChannelClick(channel)
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(top = 4.dp, bottom = 96.dp)
+                        ) {
+                            items(filteredChannels, key = { it.id }) { channel ->
+                                ChannelRow(
+                                    channel = channel,
+                                    isSelected = state.selectedChannelIds.contains(channel.id),
+                                    onClick = {
+                                        if (selectMode || state.selectedChannelIds.isNotEmpty()) {
+                                            viewModel.toggleChannelSelection(channel.id)
+                                        } else {
+                                            handleChannelClick(channel)
+                                        }
+                                    },
+                                    onLongClick = { viewModel.toggleChannelSelection(channel.id) },
+                                    onPlay = { handleChannelClick(channel) },
+                                    onPlayExternal = {
+                                        launchExternalPlayer(context, channel.url, channel.name)
                                     }
-                                },
-                                onLongClick = { viewModel.toggleChannelSelection(channel.id) },
-                                onPlay = { handleChannelClick(channel) },
-                                onPlayExternal = {
-                                    launchExternalPlayer(context, channel.url, channel.name)
+                                )
+                            }
+                        }
+
+                        // Bottom action bar: mass channel operations
+                        if (selectMode || state.selectedChannelIds.isNotEmpty()) {
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .tvFocusable(shape = RoundedCornerShape(20.dp)),
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                shadowElevation = 8.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.tv_channels_selected_count, state.selectedChannelIds.size),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (state.selectedChannelIds.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Button(
+                                        onClick = { showMoveDialog = true },
+                                        enabled = state.selectedChannelIds.isNotEmpty(),
+                                        modifier = Modifier
+                                            .height(52.dp)
+                                            .tvFocusable(shape = RoundedCornerShape(16.dp)),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(stringResource(R.string.move_to_group), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { showDeleteChannelsConfirm = true },
+                                        enabled = state.selectedChannelIds.isNotEmpty(),
+                                        modifier = Modifier
+                                            .height(52.dp)
+                                            .tvFocusable(shape = RoundedCornerShape(16.dp)),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = MaterialTheme.colorScheme.onError
+                                        )
+                                    ) {
+                                        Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(stringResource(R.string.delete), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.clearSelection() },
+                                        modifier = Modifier.tvFocusable(shape = RoundedCornerShape(20.dp))
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.clear_selection),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                 }
@@ -641,6 +720,50 @@ fun EditorScreen(
                 },
                 onAdd = { name -> viewModel.addNewGroup(name, context) },
                 onDismiss = { showGroupManageDialog = false }
+            )
+        }
+
+        // ---------- Delete selected channels (mass) ----------
+        if (showDeleteChannelsConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteChannelsConfirm = false },
+                title = {
+                    Text(
+                        text = stringResource(R.string.delete),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                },
+                text = {
+                    Text(
+                        text = stringResource(R.string.tv_delete_channels_confirm, state.selectedChannelIds.size),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteSelectedChannels(context)
+                            showDeleteChannelsConfirm = false
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
+                        modifier = Modifier.tvFocusable()
+                    ) {
+                        Text(stringResource(R.string.delete), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteChannelsConfirm = false },
+                        modifier = Modifier.tvFocusable()
+                    ) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
             )
         }
 
