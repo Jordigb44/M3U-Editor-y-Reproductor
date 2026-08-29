@@ -37,6 +37,7 @@ import com.example.data.Channel
 import com.example.ui.DefaultPlayerMode
 import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
+import com.example.ui.PlayerSession
 import com.example.ui.components.DefaultPlayerDialog
 import com.example.ui.components.ExportDialog
 import com.example.ui.components.PlayChoiceDialog
@@ -60,11 +61,11 @@ fun EditorScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     var selectedTab by remember { mutableStateOf(0) }
-    var playingChannel by remember { mutableStateOf<Channel?>(null) }
+    var playerSession by remember { mutableStateOf<PlayerSession?>(null) }
 
     BackHandler {
-        if (playingChannel != null) {
-            playingChannel = null
+        if (playerSession != null) {
+            playerSession = null
         } else if (state.selectedChannelIds.isNotEmpty()) {
             viewModel.clearSelection()
         } else if (state.selectedGroups.isNotEmpty()) {
@@ -215,18 +216,23 @@ fun EditorScreen(
                     Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.groups)) })
                 }
                 if (selectedTab == 0) {
-                    ChannelsTab(state, viewModel, onPlayChannel = { playingChannel = it })
+                    ChannelsTab(
+                        state,
+                        viewModel,
+                        onPlayChannel = { list, index -> playerSession = PlayerSession(list, index) }
+                    )
                 } else {
                     GroupsTab(state, viewModel)
                 }
             }
         }
 
-        val currentChannel = playingChannel
-        if (currentChannel != null) {
+        val session = playerSession
+        if (session != null && session.channels.isNotEmpty()) {
             PlayerScreen(
-                channel = currentChannel,
-                onBack = { playingChannel = null }
+                channels = session.channels,
+                startIndex = session.index.coerceIn(0, session.channels.lastIndex),
+                onBack = { playerSession = null }
             )
         }
 
@@ -300,7 +306,7 @@ fun EditorScreen(
 fun ChannelsTab(
     state: EditorState,
     viewModel: EditorViewModel,
-    onPlayChannel: (Channel) -> Unit
+    onPlayChannel: (List<Channel>, Int) -> Unit
 ) {
     val context = LocalContext.current
     var showGroupFilterDialog by remember { mutableStateOf(false) }
@@ -308,9 +314,17 @@ fun ChannelsTab(
     val defaultGroupText = stringResource(R.string.all_groups)
     val currentGroupText = state.selectedGroup ?: defaultGroupText
 
+    val filteredChannels = state.channels.filter {
+        (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
+            it.matchesSearch(state.searchQuery)
+    }
+
     fun handleChannelClick(channel: Channel) {
         when (state.defaultPlayerMode) {
-            DefaultPlayerMode.INTERNAL -> onPlayChannel(channel)
+            DefaultPlayerMode.INTERNAL -> {
+                val index = filteredChannels.indexOfFirst { it.id == channel.id }
+                if (index >= 0) onPlayChannel(filteredChannels, index)
+            }
             DefaultPlayerMode.EXTERNAL -> launchExternalPlayer(
                 context = context,
                 channelUrl = channel.url,
@@ -406,11 +420,6 @@ fun ChannelsTab(
             )
         }
         
-        val filteredChannels = state.channels.filter {
-            (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
-            it.matchesSearch(state.searchQuery)
-        }
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -514,7 +523,10 @@ fun ChannelsTab(
             PlayChoiceDialog(
                 channel = choiceChannel,
                 onDismiss = { pendingChoiceChannel = null },
-                onPlayInternal = { onPlayChannel(choiceChannel) },
+                onPlayInternal = {
+                    val index = filteredChannels.indexOfFirst { it.id == choiceChannel.id }
+                    if (index >= 0) onPlayChannel(filteredChannels, index)
+                },
                 onPlayExternal = {
                     launchExternalPlayer(
                         context = context,

@@ -133,4 +133,5 @@
     <string name="tv_channels_selected_count">%1$d channels selected</string>
     <string name="tv_delete_channels_confirm">Delete %1$d selected channels?</string>
     <string name="tv_live_badge">LIVE</string>
+    <string name="tv_channel_banner">%1$s  ·  %2$d/%3$d</string>
 </resources>

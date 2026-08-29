@@ -75,6 +75,7 @@ private const val PLAYER_USER_AGENT =
 
 private const val SEEK_STEP_MS = 10_000L
 private const val CONTROLS_TIMEOUT_MS = 4_000L
+private const val CHANNEL_BANNER_TIMEOUT_MS = 2_500L
 
 @OptIn(UnstableApi::class)
 class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErrorHandlingPolicy() {
@@ -99,7 +100,8 @@ private fun formatMs(ms: Long): String {
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
-    channel: Channel,
+    channels: List<Channel>,
+    startIndex: Int,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -140,6 +142,13 @@ fun PlayerScreen(
     var durationMs by remember { mutableLongStateOf(0L) }
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
     var seekFeedback by remember { mutableStateOf<String?>(null) }
+    var channelBanner by remember { mutableStateOf<String?>(null) }
+
+    var currentIndex by remember(startIndex) {
+        mutableIntStateOf(startIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0)))
+    }
+    // Recomputed on every recomposition (currentIndex is State), so it follows zapping.
+    val channel: Channel = channels[currentIndex]
 
     fun buildPlayer(): ExoPlayer {
         val loadControl = DefaultLoadControl.Builder()
@@ -176,6 +185,19 @@ fun PlayerScreen(
         if (player.isPlaying) player.pause() else player.play()
     }
 
+    /** Zapping: switch to the next/previous channel in the list. */
+    fun switchChannel(delta: Int) {
+        if (channels.size <= 1) return
+        currentIndex = (currentIndex + delta + channels.size) % channels.size
+        showControls = true
+        channelBanner = context.getString(
+            R.string.tv_channel_banner,
+            channels[currentIndex].name,
+            currentIndex + 1,
+            channels.size
+        )
+    }
+
     fun triggerReconnect() {
         connectionFailed = false
         isReconnecting = true
@@ -184,7 +206,8 @@ fun PlayerScreen(
         player.playWhenReady = true
     }
 
-    DisposableEffect(channel.url) {
+    // One-time player listener (reads the current channel dynamically on errors).
+    DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 lastError = error.errorCodeName + ": " + (error.message ?: "")
@@ -216,14 +239,21 @@ fun PlayerScreen(
         }
 
         player.addListener(listener)
-        player.setMediaItem(MediaItem.fromUri(channel.url))
-        player.prepare()
-        player.playWhenReady = true
-
         onDispose {
             player.removeListener(listener)
             player.release()
         }
+    }
+
+    // Load / switch the active channel.
+    LaunchedEffect(currentIndex) {
+        retryCount = 0
+        isReconnecting = false
+        connectionFailed = false
+        lastError = null
+        player.setMediaItem(MediaItem.fromUri(channel.url))
+        player.prepare()
+        player.playWhenReady = true
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -266,6 +296,14 @@ fun PlayerScreen(
         }
     }
 
+    // Auto-clear the channel-change banner.
+    LaunchedEffect(channelBanner) {
+        if (channelBanner != null) {
+            delay(CHANNEL_BANNER_TIMEOUT_MS)
+            channelBanner = null
+        }
+    }
+
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -299,6 +337,14 @@ fun PlayerScreen(
                         }
                         Key.DirectionRight -> {
                             seekRelative(SEEK_STEP_MS)
+                            true
+                        }
+                        Key.DirectionUp, Key.PageUp -> {
+                            switchChannel(-1)
+                            true
+                        }
+                        Key.DirectionDown, Key.PageDown -> {
+                            switchChannel(1)
                             true
                         }
                         Key.Back, Key.Escape -> {
@@ -347,6 +393,28 @@ fun PlayerScreen(
                 color = TvFocusHighlightColor,
                 strokeWidth = 5.dp
             )
+        }
+
+        // ---------- Channel-change banner ----------
+        val banner = channelBanner
+        if (banner != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 96.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Black.copy(alpha = 0.8f),
+                contentColor = Color.White
+            ) {
+                Text(
+                    text = banner,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 26.dp, vertical = 12.dp)
+                )
+            }
         }
 
         // ---------- Controls overlay (auto-hides) ----------

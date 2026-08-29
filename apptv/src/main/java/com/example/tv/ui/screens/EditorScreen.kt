@@ -51,6 +51,7 @@ import com.example.tv.ui.components.tvFocusable
 import com.example.ui.DefaultPlayerMode
 import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
+import com.example.ui.PlayerSession
 
 /** Advanced search: matches channel name, group or stream URL (case-insensitive). */
 private fun Channel.matchesSearch(query: String): Boolean =
@@ -93,7 +94,7 @@ fun EditorScreen(
 ) {
     val context = LocalContext.current
 
-    var playingChannel by remember { mutableStateOf<Channel?>(null) }
+    var playerSession by remember { mutableStateOf<PlayerSession?>(null) }
     var searchVisible by remember { mutableStateOf(false) }
     var selectMode by remember { mutableStateOf(false) }
     var groupSelectMode by remember { mutableStateOf(false) }
@@ -110,8 +111,8 @@ fun EditorScreen(
     var exportErrorMessage by remember { mutableStateOf<String?>(null) }
 
     fun handleBack() {
-        if (playingChannel != null) {
-            playingChannel = null
+        if (playerSession != null) {
+            playerSession = null
         } else if (state.selectedChannelIds.isNotEmpty()) {
             viewModel.clearSelection()
         } else if (selectMode) {
@@ -127,9 +128,18 @@ fun EditorScreen(
 
     BackHandler { handleBack() }
 
+    val filteredChannels = state.channels.filter {
+        (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
+            it.matchesSearch(state.searchQuery)
+    }
+    val filteredChannelIds = filteredChannels.map { it.id }
+
     fun handleChannelClick(channel: Channel) {
         when (state.defaultPlayerMode) {
-            DefaultPlayerMode.INTERNAL -> playingChannel = channel
+            DefaultPlayerMode.INTERNAL -> {
+                val index = filteredChannels.indexOfFirst { it.id == channel.id }
+                if (index >= 0) playerSession = PlayerSession(filteredChannels, index)
+            }
             DefaultPlayerMode.EXTERNAL -> launchExternalPlayer(
                 context = context,
                 channelUrl = channel.url,
@@ -140,12 +150,6 @@ fun EditorScreen(
             DefaultPlayerMode.ASK -> pendingChoiceChannel = channel
         }
     }
-
-    val filteredChannels = state.channels.filter {
-        (state.selectedGroup == null || it.groupTitle == state.selectedGroup) &&
-            it.matchesSearch(state.searchQuery)
-    }
-    val filteredChannelIds = filteredChannels.map { it.id }
 
     val title = when {
         state.selectedChannelIds.isNotEmpty() ->
@@ -843,7 +847,10 @@ fun EditorScreen(
             PlayChoiceDialog(
                 channel = choiceChannel,
                 onDismiss = { pendingChoiceChannel = null },
-                onPlayInternal = { playingChannel = choiceChannel },
+                onPlayInternal = {
+                    val index = filteredChannels.indexOfFirst { it.id == choiceChannel.id }
+                    if (index >= 0) playerSession = PlayerSession(filteredChannels, index)
+                },
                 onPlayExternal = {
                     launchExternalPlayer(
                         context = context,
@@ -899,11 +906,14 @@ fun EditorScreen(
         }
 
         // ---------- Internal player on top ----------
-        playingChannel?.let { channel ->
-            PlayerScreen(
-                channel = channel,
-                onBack = { playingChannel = null }
-            )
+        playerSession?.let { session ->
+            if (session.channels.isNotEmpty()) {
+                PlayerScreen(
+                    channels = session.channels,
+                    startIndex = session.index.coerceIn(0, session.channels.lastIndex),
+                    onBack = { playerSession = null }
+                )
+            }
         }
     }
 }

@@ -118,4 +118,6 @@
     <string name="file_picker_paste_path">Pegar ruta directa (/sdcard/...)</string>
     <string name="file_picker_file_size_kb">%1$d KB</string>
     <string name="file_picker_load">CARGAR</string>
+    <string name="prev_channel">Canal anterior</string>
+    <string name="next_channel">Canal siguiente</string>
 </resources>

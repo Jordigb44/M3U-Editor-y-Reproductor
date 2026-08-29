@@ -26,6 +26,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -78,7 +80,8 @@ class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErr
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
-    channel: Channel,
+    channels: List<Channel>,
+    startIndex: Int,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -115,6 +118,12 @@ fun PlayerScreen(
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
     
     var showControls by remember { mutableStateOf(true) }
+
+    var currentIndex by remember(startIndex) {
+        mutableIntStateOf(startIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0)))
+    }
+    // Recomputed on every recomposition (currentIndex is State), so it follows zapping.
+    val channel: Channel = channels[currentIndex]
 
     LaunchedEffect(showControls) {
         if (showControls) {
@@ -168,7 +177,15 @@ fun PlayerScreen(
         player.playWhenReady = true
     }
 
-    DisposableEffect(channel.url) {
+    /** Zapping: switch to the next/previous channel in the list. */
+    fun switchChannel(delta: Int) {
+        if (channels.size <= 1) return
+        currentIndex = (currentIndex + delta + channels.size) % channels.size
+        showControls = true
+    }
+
+    // One-time player listener (reads the current channel dynamically on errors).
+    DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 lastError = error.errorCodeName + ": " + (error.message ?: "")
@@ -196,14 +213,21 @@ fun PlayerScreen(
         }
 
         player.addListener(listener)
-        player.setMediaItem(MediaItem.fromUri(channel.url))
-        player.prepare()
-        player.playWhenReady = true
-
         onDispose {
             player.removeListener(listener)
             player.release()
         }
+    }
+
+    // Load / switch the active channel.
+    LaunchedEffect(currentIndex) {
+        retryCount = 0
+        isReconnecting = false
+        connectionFailed = false
+        lastError = null
+        player.setMediaItem(MediaItem.fromUri(channel.url))
+        player.prepare()
+        player.playWhenReady = true
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -249,6 +273,14 @@ fun PlayerScreen(
                         }
                         Key.DirectionRight -> {
                             player.seekTo((player.currentPosition + 10000).coerceAtMost(player.duration))
+                            true
+                        }
+                        Key.DirectionUp, Key.PageUp -> {
+                            switchChannel(-1)
+                            true
+                        }
+                        Key.DirectionDown, Key.PageDown -> {
+                            switchChannel(1)
                             true
                         }
                         Key.Back, Key.Escape -> {
@@ -310,6 +342,27 @@ fun PlayerScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.back),
+                        tint = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = { switchChannel(-1) },
+                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipPrevious,
+                        contentDescription = stringResource(R.string.prev_channel),
+                        tint = Color.White
+                    )
+                }
+                IconButton(
+                    onClick = { switchChannel(1) },
+                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = stringResource(R.string.next_channel),
                         tint = Color.White
                     )
                 }
