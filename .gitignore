@@ -22,3 +22,7 @@ debug.keystore
 
 # Local Gradle user home left by tooling (build cache)
 .gradle-home
+
+# Release signing (secret)
+my-upload-key.jks
+my-upload-key-password.txt

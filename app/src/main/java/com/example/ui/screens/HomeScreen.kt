@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,11 +35,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.jordiguixbetancor.m3ueditor.BuildConfig
 import com.jordiguixbetancor.m3ueditor.R
 import com.example.data.SavedPlaylist
+import com.example.ui.AppUpdater
 import com.example.ui.EditorState
+import com.example.ui.UpdateInfo
 import com.example.ui.components.FilePickerDialog
 import com.example.ui.components.dpadFocusable
+import kotlinx.coroutines.launch
+
+private const val UPDATE_REPO = "Jordigb44/M3U-Editor-y-Reproductor"
 
 private fun openExternalOrInternalFilePicker(
     context: Context,
@@ -132,6 +139,26 @@ fun HomeScreen(
     var playlistToRename by remember { mutableStateOf<SavedPlaylist?>(null) }
     var playlistToDelete by remember { mutableStateOf<SavedPlaylist?>(null) }
     val clipboardManager = LocalClipboardManager.current
+
+    // ---------- In-app update check ----------
+    val updateScope = rememberCoroutineScope()
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var downloadingUpdate by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+
+    suspend fun fetchUpdate(): UpdateInfo? = AppUpdater.checkLatest(
+        repo = UPDATE_REPO,
+        assetMatches = { it.contains("mobile", ignoreCase = true) },
+        currentVersion = BuildConfig.VERSION_NAME
+    )
+
+    // Silent check every time the home screen is shown.
+    LaunchedEffect(Unit) {
+        checkingUpdate = true
+        updateInfo = fetchUpdate()
+        checkingUpdate = false
+    }
     val externalFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -408,6 +435,38 @@ fun HomeScreen(
                         Text(stringResource(R.string.home_load_demo_playlist), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
+
+                item {
+                    Button(
+                        onClick = {
+                            updateScope.launch {
+                                checkingUpdate = true
+                                val info = fetchUpdate()
+                                checkingUpdate = false
+                                if (info != null) {
+                                    updateInfo = info
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.update_up_to_date, BuildConfig.VERSION_NAME),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        },
+                        enabled = !checkingUpdate && !state.isLoading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .dpadFocusable(shape = RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ) {
+                        Icon(Icons.Filled.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.update_check), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
@@ -550,6 +609,87 @@ fun HomeScreen(
                         Text(stringResource(R.string.cancel))
                     }
                 }
+            )
+        }
+
+        // ---------- Update available dialog ----------
+        updateInfo?.let { info ->
+            AlertDialog(
+                onDismissRequest = { updateInfo = null },
+                title = {
+                    Text(
+                        text = stringResource(R.string.update_available_title, info.latestVersion),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                text = {
+                    Text(
+                        text = stringResource(R.string.update_available_body, BuildConfig.VERSION_NAME, info.releaseNotes ?: ""),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val url = info.apkUrl
+                            updateInfo = null
+                            if (url == null) {
+                                Toast.makeText(context, context.getString(R.string.update_install_error), Toast.LENGTH_LONG).show()
+                            } else {
+                                updateScope.launch {
+                                    downloadingUpdate = true
+                                    downloadProgress = 0f
+                                    val apk = AppUpdater.downloadApk(context, url, "update-${info.latestVersion}.apk") { p ->
+                                        downloadProgress = p
+                                    }
+                                    downloadingUpdate = false
+                                    if (apk != null && !AppUpdater.promptInstall(context, apk)) {
+                                        Toast.makeText(context, context.getString(R.string.update_install_error), Toast.LENGTH_LONG).show()
+                                    } else if (apk == null) {
+                                        Toast.makeText(context, context.getString(R.string.update_install_error), Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.dpadFocusable()
+                    ) {
+                        Text(stringResource(R.string.update_download_install), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { updateInfo = null },
+                        modifier = Modifier.dpadFocusable()
+                    ) {
+                        Text(stringResource(R.string.update_not_now))
+                    }
+                }
+            )
+        }
+
+        // ---------- Download progress dialog ----------
+        if (downloadingUpdate) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = {
+                    Text(stringResource(R.string.update_check), fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.update_downloading, (downloadProgress * 100).toInt()),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {}
             )
         }
     }

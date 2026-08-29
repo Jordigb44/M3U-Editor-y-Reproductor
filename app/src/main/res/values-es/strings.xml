@@ -123,4 +123,12 @@
     <string name="epg_now">Ahora: %1$s</string>
     <string name="epg_next">Sigue: %1$s</string>
     <string name="channel_list">Lista de canales</string>
+    <string name="update_check">BUSCAR ACTUALIZACIONES</string>
+    <string name="update_available_title">Nueva versión %1$s disponible</string>
+    <string name="update_available_body">Versión actual: %1$s\n\n%2$s</string>
+    <string name="update_download_install">DESCARGAR E INSTALAR</string>
+    <string name="update_not_now">Ahora no</string>
+    <string name="update_downloading">Descargando actualización… %1$d%%</string>
+    <string name="update_install_error">No se pudo abrir el instalador. Puedes abrir el APK manualmente.</string>
+    <string name="update_up_to_date">Tienes la última versión (%1$s).</string>
 </resources>

@@ -139,4 +139,12 @@
     <string name="epg_next">Next: %1$s</string>
     <string name="tv_channel_list">CHANNEL LIST</string>
     <string name="tv_channel_list_count">CHANNELS (%1$d)</string>
+    <string name="update_check">CHECK FOR UPDATES</string>
+    <string name="update_available_title">New version %1$s available</string>
+    <string name="update_available_body">Current version: %1$s\n\n%2$s</string>
+    <string name="update_download_install">DOWNLOAD &amp; INSTALL</string>
+    <string name="update_not_now">Not now</string>
+    <string name="update_downloading">Downloading update… %1$d%%</string>
+    <string name="update_install_error">Could not start the installer. You can open the APK manually.</string>
+    <string name="update_up_to_date">You have the latest version (%1$s).</string>
 </resources>

@@ -19,6 +19,7 @@ android {
 // Shared business logic for both apps (mobile and TV apps):
 // M3U parser, channel/playlist models, networking, EditorViewModel and player tuning.
 dependencies {
+  implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.ktx)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)

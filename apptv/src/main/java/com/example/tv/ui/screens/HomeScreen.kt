@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,12 +39,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.jordiguixbetancor.m3ueditor.tv.BuildConfig
 import com.jordiguixbetancor.m3ueditor.tv.R
 import com.example.data.SavedPlaylist
 import com.example.tv.ui.components.FilePickerDialog
 import com.example.tv.ui.components.TvFocusHighlightColor
 import com.example.tv.ui.components.tvFocusable
+import com.example.ui.AppUpdater
 import com.example.ui.EditorState
+import com.example.ui.UpdateInfo
+import kotlinx.coroutines.launch
+
+private const val UPDATE_REPO = "Jordigb44/M3U-Editor-y-Reproductor"
 
 /**
  * Tries to launch a real 3rd-party file manager first (ACTION_GET_CONTENT / OPEN_DOCUMENT / PICK).
@@ -118,6 +126,26 @@ fun HomeScreen(
     var showFilePickerDialog by remember { mutableStateOf(false) }
     var playlistToRename by remember { mutableStateOf<SavedPlaylist?>(null) }
     var playlistToDelete by remember { mutableStateOf<SavedPlaylist?>(null) }
+
+    // ---------- In-app update check ----------
+    val updateScope = rememberCoroutineScope()
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var downloadingUpdate by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+
+    suspend fun fetchUpdate(): UpdateInfo? = AppUpdater.checkLatest(
+        repo = UPDATE_REPO,
+        assetMatches = { it.contains("tv", ignoreCase = true) },
+        currentVersion = BuildConfig.VERSION_NAME
+    )
+
+    // Silent check every time the home screen is shown.
+    LaunchedEffect(Unit) {
+        checkingUpdate = true
+        updateInfo = fetchUpdate()
+        checkingUpdate = false
+    }
 
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -241,6 +269,41 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(stringResource(R.string.tv_load_demo), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
+            }
+
+            // ---------- Check for updates ----------
+            Button(
+                onClick = {
+                    updateScope.launch {
+                        checkingUpdate = true
+                        val info = fetchUpdate()
+                        checkingUpdate = false
+                        if (info != null) {
+                            updateInfo = info
+                        } else {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.update_up_to_date, BuildConfig.VERSION_NAME),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                },
+                enabled = !checkingUpdate && !state.isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                    .height(56.dp)
+                    .tvFocusable(shape = RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Icon(Icons.Filled.SystemUpdate, contentDescription = null, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(stringResource(R.string.update_check), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             }
 
             // ---------- My playlists ----------
@@ -461,6 +524,85 @@ fun HomeScreen(
                         Text(stringResource(R.string.accept))
                     }
                 }
+            )
+        }
+
+        // ---------- Update available dialog ----------
+        updateInfo?.let { info ->
+            AlertDialog(
+                onDismissRequest = { updateInfo = null },
+                title = {
+                    Text(
+                        text = stringResource(R.string.update_available_title, info.latestVersion),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                text = {
+                    Text(
+                        text = stringResource(R.string.update_available_body, BuildConfig.VERSION_NAME, info.releaseNotes ?: ""),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val url = info.apkUrl
+                            updateInfo = null
+                            if (url == null) {
+                                Toast.makeText(context, context.getString(R.string.update_install_error), Toast.LENGTH_LONG).show()
+                            } else {
+                                updateScope.launch {
+                                    downloadingUpdate = true
+                                    downloadProgress = 0f
+                                    val apk = AppUpdater.downloadApk(context, url, "update-${info.latestVersion}.apk") { p ->
+                                        downloadProgress = p
+                                    }
+                                    downloadingUpdate = false
+                                    if (apk == null || !AppUpdater.promptInstall(context, apk)) {
+                                        Toast.makeText(context, context.getString(R.string.update_install_error), Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.tvFocusable()
+                    ) {
+                        Text(stringResource(R.string.update_download_install), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { updateInfo = null },
+                        modifier = Modifier.tvFocusable()
+                    ) {
+                        Text(stringResource(R.string.update_not_now))
+                    }
+                }
+            )
+        }
+
+        // ---------- Download progress dialog ----------
+        if (downloadingUpdate) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = {
+                    Text(stringResource(R.string.update_check), fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.update_downloading, (downloadProgress * 100).toInt()),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {}
             )
         }
 
