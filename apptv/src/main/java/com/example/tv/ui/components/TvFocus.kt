@@ -42,3 +42,20 @@ fun Modifier.tvFocusable(
         .scale(scaleValue)
         .border(width = borderWidth, color = if (isFocused) focusColor else Color.Transparent, shape = shape)
 }
+
+/**
+ * Manual selection ring for elements driven by an explicit selection index instead of
+ * focus traversal (used by the player control bar, where the fullscreen background box
+ * would otherwise swallow D-pad navigation).
+ */
+@Composable
+fun Modifier.tvRing(
+    selected: Boolean,
+    shape: Shape = RoundedCornerShape(16.dp)
+): Modifier {
+    val scaleValue by animateFloatAsState(targetValue = if (selected) 1.08f else 1f, label = "tvRingScale")
+    val borderWidth by animateDpAsState(targetValue = if (selected) 4.dp else 0.dp, label = "tvRingBorder")
+    return this
+        .scale(scaleValue)
+        .border(width = borderWidth, color = TvFocusHighlightColor, shape = shape)
+}

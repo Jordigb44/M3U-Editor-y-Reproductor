@@ -75,6 +75,7 @@ import com.example.tv.PlayerKeyRouter
 import com.example.tv.R
 import com.example.tv.ui.components.TvFocusHighlightColor
 import com.example.tv.ui.components.tvFocusable
+import com.example.tv.ui.components.tvRing
 import com.example.ui.AdaptiveLoadControl
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -86,6 +87,7 @@ private const val PLAYER_USER_AGENT =
 private const val SEEK_STEP_MS = 10_000L
 private const val CONTROLS_TIMEOUT_MS = 4_000L
 private const val CHANNEL_BANNER_TIMEOUT_MS = 2_500L
+private const val CONTROL_COUNT = 6
 
 @OptIn(UnstableApi::class)
 class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErrorHandlingPolicy() {
@@ -157,6 +159,9 @@ fun PlayerScreen(
     var showChannelList by remember { mutableStateOf(false) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
+    // Manually selected control in the bottom bar (0 rewind, 1 play, 2 forward,
+    // 3 aspect, 4 external, 5 list). D-pad left/right moves the ring between them.
+    var selectedControl by remember { mutableIntStateOf(1) }
 
     var currentIndex by remember(startIndex) {
         mutableIntStateOf(startIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0)))
@@ -197,6 +202,26 @@ fun PlayerScreen(
 
     fun togglePlay() {
         if (player.isPlaying) player.pause() else player.play()
+    }
+
+    fun cycleResizeMode() {
+        resizeMode = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+        }
+    }
+
+    /** Activates the manually selected control in the bottom bar. */
+    fun activateControl(index: Int) {
+        when (index) {
+            0 -> seekRelative(-SEEK_STEP_MS)
+            1 -> togglePlay()
+            2 -> seekRelative(SEEK_STEP_MS)
+            3 -> cycleResizeMode()
+            4 -> launchExternalPlayer(context, channel.url, channel.name)
+            5 -> showChannelList = true
+        }
     }
 
     /** Zapping: switch to the next/previous channel in the list. */
@@ -375,22 +400,34 @@ fun PlayerScreen(
                     }
                 }
 
-                // Seek only while the controls are hidden: with the control bar visible,
-                // left/right move focus between the buttons instead of seeking.
-                if (!showControls && (keyEvent.key == Key.DirectionLeft || keyEvent.key == Key.DirectionRight)) {
-                    showControls = true
-                    if (keyEvent.key == Key.DirectionLeft) {
-                        seekRelative(-SEEK_STEP_MS)
-                    } else {
-                        seekRelative(SEEK_STEP_MS)
-                    }
-                    return@onKeyEvent true
-                }
-
-                showControls = true
                 when (keyEvent.key) {
+                    // With the control bar visible, left/right move the selection ring
+                    // between all buttons; hidden, they seek.
+                    Key.DirectionLeft -> {
+                        if (showControls) {
+                            selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
+                        } else {
+                            showControls = true
+                            seekRelative(-SEEK_STEP_MS)
+                        }
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        if (showControls) {
+                            selectedControl = (selectedControl + 1) % CONTROL_COUNT
+                        } else {
+                            showControls = true
+                            seekRelative(SEEK_STEP_MS)
+                        }
+                        true
+                    }
                     Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-                        togglePlay()
+                        if (showControls) {
+                            activateControl(selectedControl)
+                        } else {
+                            showControls = true
+                            togglePlay()
+                        }
                         true
                     }
                     Key.MediaPlay -> {
@@ -413,7 +450,10 @@ fun PlayerScreen(
                         onBack()
                         true
                     }
-                    else -> false
+                    else -> {
+                        showControls = true
+                        false
+                    }
                 }
             }
             .clickable(
@@ -629,7 +669,7 @@ fun PlayerScreen(
 
                         Spacer(modifier = Modifier.height(18.dp))
 
-                        // ---------- Control buttons (D-pad friendly) ----------
+                        // ---------- Control buttons (D-pad: left/right moves the ring) ----------
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center,
@@ -638,6 +678,7 @@ fun PlayerScreen(
                             ControlButton(
                                 icon = Icons.Filled.FastRewind,
                                 contentDescription = "−10s",
+                                selected = selectedControl == 0,
                                 onClick = { seekRelative(-SEEK_STEP_MS) }
                             )
                             Spacer(modifier = Modifier.width(24.dp))
@@ -649,7 +690,7 @@ fun PlayerScreen(
                                 color = Color.White,
                                 modifier = Modifier
                                     .size(76.dp)
-                                    .tvFocusable(shape = CircleShape)
+                                    .tvRing(selected = selectedControl == 1, shape = CircleShape)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -665,6 +706,7 @@ fun PlayerScreen(
                             ControlButton(
                                 icon = Icons.Filled.FastForward,
                                 contentDescription = "+10s",
+                                selected = selectedControl == 2,
                                 onClick = { seekRelative(SEEK_STEP_MS) }
                             )
                             Spacer(modifier = Modifier.width(48.dp))
@@ -672,19 +714,15 @@ fun PlayerScreen(
                             ControlButton(
                                 icon = Icons.Filled.AspectRatio,
                                 contentDescription = stringResource(R.string.player_aspect_ratio),
-                                onClick = {
-                                    resizeMode = when (resizeMode) {
-                                        AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                        else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                    }
-                                }
+                                selected = selectedControl == 3,
+                                onClick = { cycleResizeMode() }
                             )
                             Spacer(modifier = Modifier.width(16.dp))
 
                             ControlButton(
                                 icon = Icons.AutoMirrored.Filled.OpenInNew,
                                 contentDescription = stringResource(R.string.play_with_external_app),
+                                selected = selectedControl == 4,
                                 onClick = { launchExternalPlayer(context, channel.url, channel.name) }
                             )
                             Spacer(modifier = Modifier.width(16.dp))
@@ -692,6 +730,7 @@ fun PlayerScreen(
                             ControlButton(
                                 icon = Icons.Filled.List,
                                 contentDescription = stringResource(R.string.tv_channel_list),
+                                selected = selectedControl == 5,
                                 onClick = { showChannelList = true }
                             )
                         }
@@ -952,15 +991,16 @@ private fun ChannelListOverlay(
 private fun ControlButton(
     icon: ImageVector,
     contentDescription: String,
+    selected: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
-        color = Color.White.copy(alpha = 0.14f),
+        color = if (selected) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.14f),
         modifier = Modifier
             .size(66.dp)
-            .tvFocusable(shape = RoundedCornerShape(18.dp))
+            .tvRing(selected = selected, shape = RoundedCornerShape(18.dp))
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
