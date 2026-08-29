@@ -567,14 +567,22 @@ class EditorViewModel : ViewModel() {
             if (!it.isSuccessful) {
                 throw Exception("HTTP ${it.code}: ${it.message.ifBlank { "Error al descargar la lista" }}")
             }
+            val contentType = it.header("Content-Type") ?: ""
+            if (contentType.contains("html", ignoreCase = true)) {
+                throw Exception("El servidor devolvió una página web, no una lista M3U. La lista puede estar bloqueada por tu red o proveedor.")
+            }
             val body = it.body ?: throw Exception("Respuesta vacía del servidor")
             val contentLength = body.contentLength()
             if (contentLength > MAX_PLAYLIST_BYTES) {
                 throw Exception("La lista es demasiado grande (máximo ${MAX_PLAYLIST_BYTES / (1024 * 1024)} MB).")
             }
-            body.byteStream().use { stream ->
-                M3uParser.parse(stream)
+            val parsed = body.byteStream().use { stream -> M3uParser.parse(stream) }
+            // A non-M3U response (e.g. an ISP block page) becomes a bunch of
+            // "Unknown Channel" rows — treat that as an invalid list.
+            if (parsed.channels.isNotEmpty() && parsed.channels.all { it.name == "Unknown Channel" }) {
+                throw Exception("La URL no devuelve una lista M3U válida. Puede estar bloqueada por tu red o proveedor.")
             }
+            parsed
         }
     }
 
