@@ -147,10 +147,11 @@ fun HomeScreen(
         showFilePickerDialog = true
     }
 
-    Box(
+    Surface(
         modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // ---------- Header ----------
