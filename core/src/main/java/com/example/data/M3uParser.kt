@@ -30,7 +30,9 @@ object M3uParser {
             if (trimmed.isEmpty()) continue
 
             if (trimmed.startsWith("#EXTM3U")) {
-                if (header == DEFAULT_HEADER) header = trimmed
+                // Prefer the header line that carries playlist attributes (e.g. url-tvg for EPG).
+                val hasTvg = trimmed.contains("url-tvg") || trimmed.contains("x-tvg-url") || trimmed.contains("tvg-url")
+                if (header == DEFAULT_HEADER || hasTvg) header = trimmed
                 continue
             }
 

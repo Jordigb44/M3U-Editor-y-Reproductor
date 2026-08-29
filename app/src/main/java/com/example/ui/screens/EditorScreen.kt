@@ -219,7 +219,9 @@ fun EditorScreen(
                     ChannelsTab(
                         state,
                         viewModel,
-                        onPlayChannel = { list, index -> playerSession = PlayerSession(list, index) }
+                        onPlayChannel = { list, index ->
+                            playerSession = PlayerSession(list, index, viewModel.activeEpgUrl())
+                        }
                     )
                 } else {
                     GroupsTab(state, viewModel)

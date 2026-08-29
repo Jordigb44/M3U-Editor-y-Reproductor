@@ -59,6 +59,9 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.R
 import com.example.data.Channel
+import com.example.data.EpgLoader
+import com.example.data.EpgProgram
+import com.example.data.XmltvParser
 import com.example.ui.components.dpadFocusable
 import kotlinx.coroutines.delay
 
@@ -82,7 +85,8 @@ class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErr
 fun PlayerScreen(
     channels: List<Channel>,
     startIndex: Int,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    epgUrl: String? = null
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -118,12 +122,35 @@ fun PlayerScreen(
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
     
     var showControls by remember { mutableStateOf(true) }
+    var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
+    var epgLoading by remember { mutableStateOf(false) }
 
     var currentIndex by remember(startIndex) {
         mutableIntStateOf(startIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0)))
     }
     // Recomputed on every recomposition (currentIndex is State), so it follows zapping.
     val channel: Channel = channels[currentIndex]
+
+    /** (now playing, next) for a channel, from the loaded EPG, or null if unavailable. */
+    fun epgNowNextFor(ch: Channel): Pair<EpgProgram?, EpgProgram?>? {
+        val map = epgByChannel ?: return null
+        val id = ch.attributes["tvg-id"] ?: return null
+        val list = map[id] ?: return null
+        if (list.isEmpty()) return null
+        return XmltvParser.nowAndNext(list, System.currentTimeMillis())
+    }
+
+    // Load the EPG guide once per player session (only for channels in this list).
+    LaunchedEffect(epgUrl) {
+        if (epgUrl.isNullOrBlank()) return@LaunchedEffect
+        epgLoading = true
+        val wanted = channels.mapNotNull { it.attributes["tvg-id"] }
+            .filter { it.isNotBlank() }.toSet()
+        if (wanted.isNotEmpty()) {
+            epgByChannel = EpgLoader.load(epgUrl, wanted)
+        }
+        epgLoading = false
+    }
 
     LaunchedEffect(showControls) {
         if (showControls) {
@@ -379,6 +406,19 @@ fun PlayerScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.7f)
                     )
+                    val nowTitle = remember(epgByChannel, currentIndex) {
+                        epgNowNextFor(channels[currentIndex])?.first?.title
+                    }
+                    if (nowTitle != null) {
+                        Text(
+                            text = stringResource(R.string.epg_now, nowTitle),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 
                 IconButton(

@@ -1,6 +1,7 @@
 package com.example.tv
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -27,6 +28,21 @@ class MainActivity : ComponentActivity() {
                 TvApp()
             }
         }
+    }
+
+    // Volume-button channel zapping while the player is open: VOLUME_UP = next channel,
+    // VOLUME_DOWN = previous. Consumed only when the player is active (router registered).
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val delta = when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> 1
+            KeyEvent.KEYCODE_VOLUME_DOWN -> -1
+            else -> null
+        }
+        if (delta != null && PlayerKeyRouter.onZap != null) {
+            PlayerKeyRouter.onZap?.invoke(delta)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }
 

@@ -75,6 +75,14 @@ class EditorViewModel : ViewModel() {
      *  attributes (e.g. url-tvg / x-tvg-url). Not part of the UI state. */
     private var currentHeader: String = DEFAULT_HEADER
 
+    /** EPG (XMLTV) URL declared in the active playlist header, if any. */
+    fun activeEpgUrl(): String? {
+        val header = currentHeader
+        if (header.isBlank()) return null
+        return Regex("(?:url-tvg|x-tvg-url|tvg-url)=\"([^\"]+)\"")
+            .find(header)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+    }
+
     private val client: OkHttpClient by lazy { createOkHttpClient() }
 
     private fun createOkHttpClient(): OkHttpClient {

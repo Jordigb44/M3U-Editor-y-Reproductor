@@ -134,4 +134,7 @@
     <string name="tv_delete_channels_confirm">Delete %1$d selected channels?</string>
     <string name="tv_live_badge">LIVE</string>
     <string name="tv_channel_banner">%1$s  ·  %2$d/%3$d</string>
+    <string name="tv_epg_loading">Loading guide…</string>
+    <string name="epg_now">Now: %1$s</string>
+    <string name="epg_next">Next: %1$s</string>
 </resources>

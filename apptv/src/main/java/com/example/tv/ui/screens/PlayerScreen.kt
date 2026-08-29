@@ -63,6 +63,10 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.data.Channel
+import com.example.data.EpgLoader
+import com.example.data.EpgProgram
+import com.example.data.XmltvParser
+import com.example.tv.PlayerKeyRouter
 import com.example.tv.R
 import com.example.tv.ui.components.TvFocusHighlightColor
 import com.example.tv.ui.components.tvFocusable
@@ -102,7 +106,8 @@ private fun formatMs(ms: Long): String {
 fun PlayerScreen(
     channels: List<Channel>,
     startIndex: Int,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    epgUrl: String? = null
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -143,6 +148,8 @@ fun PlayerScreen(
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
     var seekFeedback by remember { mutableStateOf<String?>(null) }
     var channelBanner by remember { mutableStateOf<String?>(null) }
+    var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
+    var epgLoading by remember { mutableStateOf(false) }
 
     var currentIndex by remember(startIndex) {
         mutableIntStateOf(startIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0)))
@@ -190,12 +197,25 @@ fun PlayerScreen(
         if (channels.size <= 1) return
         currentIndex = (currentIndex + delta + channels.size) % channels.size
         showControls = true
-        channelBanner = context.getString(
-            R.string.tv_channel_banner,
-            channels[currentIndex].name,
-            currentIndex + 1,
-            channels.size
-        )
+    }
+
+    /** (now playing, next) for a channel, from the loaded EPG, or null if unavailable. */
+    fun epgNowNextFor(ch: Channel): Pair<EpgProgram?, EpgProgram?>? {
+        val map = epgByChannel ?: return null
+        val id = ch.attributes["tvg-id"] ?: return null
+        val list = map[id] ?: return null
+        if (list.isEmpty()) return null
+        return XmltvParser.nowAndNext(list, System.currentTimeMillis())
+    }
+
+    fun buildChannelBanner(): String {
+        val ch = channels[currentIndex]
+        val base = context.getString(R.string.tv_channel_banner, ch.name, currentIndex + 1, channels.size)
+        val epg = epgNowNextFor(ch)
+        if (epg == null) return base
+        val now = epg.first?.title?.let { context.getString(R.string.epg_now, it) }
+        val next = epg.second?.title?.let { context.getString(R.string.epg_next, it) }
+        return listOfNotNull(base, now, next).joinToString("\n")
     }
 
     fun triggerReconnect() {
@@ -251,9 +271,28 @@ fun PlayerScreen(
         isReconnecting = false
         connectionFailed = false
         lastError = null
+        channelBanner = buildChannelBanner()
         player.setMediaItem(MediaItem.fromUri(channel.url))
         player.prepare()
         player.playWhenReady = true
+    }
+
+    // Load the EPG guide once per player session (only for channels in this list).
+    LaunchedEffect(epgUrl) {
+        if (epgUrl.isNullOrBlank()) return@LaunchedEffect
+        epgLoading = true
+        val wanted = channels.mapNotNull { it.attributes["tvg-id"] }
+            .filter { it.isNotBlank() }.toSet()
+        if (wanted.isNotEmpty()) {
+            epgByChannel = EpgLoader.load(epgUrl, wanted)
+        }
+        epgLoading = false
+    }
+
+    // Route volume-button presses (handled at the Activity level) into zapping.
+    DisposableEffect(Unit) {
+        PlayerKeyRouter.onZap = { switchChannel(it) }
+        onDispose { PlayerKeyRouter.onZap = null }
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -339,11 +378,11 @@ fun PlayerScreen(
                             seekRelative(SEEK_STEP_MS)
                             true
                         }
-                        Key.DirectionUp, Key.PageUp -> {
+                        Key.DirectionUp, Key.PageUp, Key.VolumeDown -> {
                             switchChannel(-1)
                             true
                         }
-                        Key.DirectionDown, Key.PageDown -> {
+                        Key.DirectionDown, Key.PageDown, Key.VolumeUp -> {
                             switchChannel(1)
                             true
                         }
@@ -410,7 +449,7 @@ fun PlayerScreen(
                     text = banner,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 26.dp, vertical = 12.dp)
                 )
@@ -469,6 +508,26 @@ fun PlayerScreen(
                                     color = Color.White.copy(alpha = 0.7f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            val nowTitle = remember(epgByChannel, currentIndex) {
+                                epgNowNextFor(channels[currentIndex])?.first?.title
+                            }
+                            if (nowTitle != null) {
+                                Text(
+                                    text = stringResource(R.string.epg_now, nowTitle),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            } else if (epgLoading) {
+                                Text(
+                                    text = stringResource(R.string.tv_epg_loading),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    maxLines = 1
                                 )
                             }
                         }

@@ -138,7 +138,9 @@ fun EditorScreen(
         when (state.defaultPlayerMode) {
             DefaultPlayerMode.INTERNAL -> {
                 val index = filteredChannels.indexOfFirst { it.id == channel.id }
-                if (index >= 0) playerSession = PlayerSession(filteredChannels, index)
+                if (index >= 0) {
+                    playerSession = PlayerSession(filteredChannels, index, viewModel.activeEpgUrl())
+                }
             }
             DefaultPlayerMode.EXTERNAL -> launchExternalPlayer(
                 context = context,
@@ -849,7 +851,9 @@ fun EditorScreen(
                 onDismiss = { pendingChoiceChannel = null },
                 onPlayInternal = {
                     val index = filteredChannels.indexOfFirst { it.id == choiceChannel.id }
-                    if (index >= 0) playerSession = PlayerSession(filteredChannels, index)
+                    if (index >= 0) {
+                        playerSession = PlayerSession(filteredChannels, index, viewModel.activeEpgUrl())
+                    }
                 },
                 onPlayExternal = {
                     launchExternalPlayer(
