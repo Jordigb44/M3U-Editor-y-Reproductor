@@ -11,28 +11,35 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -55,14 +62,19 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.example.tv.R
 import com.example.data.Channel
+import com.example.tv.R
+import com.example.tv.ui.components.TvFocusHighlightColor
 import com.example.tv.ui.components.tvFocusable
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 /** Browser-like User-Agent so IPTV servers/CDNs accept the stream requests. */
 private const val PLAYER_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+private const val SEEK_STEP_MS = 10_000L
+private const val CONTROLS_TIMEOUT_MS = 4_000L
 
 @OptIn(UnstableApi::class)
 class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErrorHandlingPolicy() {
@@ -73,6 +85,15 @@ class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErr
     override fun getMinimumLoadableRetryCount(dataType: Int): Int {
         return maxRetries
     }
+}
+
+private fun formatMs(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s)
+    else String.format(Locale.getDefault(), "%02d:%02d", m, s)
 }
 
 @OptIn(UnstableApi::class)
@@ -87,7 +108,7 @@ fun PlayerScreen(
     // Back always closes the player and returns to the editor, regardless of focus.
     BackHandler(onBack = onBack)
 
-    // Prevent screen dimming or sleep mode during video playback
+    // Prevent screen dimming or sleep mode during video playback.
     DisposableEffect(Unit) {
         val window = activity?.window
         if (window != null) {
@@ -113,31 +134,16 @@ fun PlayerScreen(
     var connectionFailed by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
-    
+    var isPlaying by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
-
-    LaunchedEffect(showControls) {
-        if (showControls) {
-            delay(3500)
-            showControls = false
-        }
-    }
-
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
+    var seekFeedback by remember { mutableStateOf<String?>(null) }
 
     fun buildPlayer(): ExoPlayer {
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                1000,
-                5000,
-                500,
-                1000
-            )
+            .setBufferDurationsMs(1000, 5000, 500, 1000)
             .build()
 
         // Browser User-Agent + cross-protocol redirects (https->http) are required by many
@@ -159,6 +165,16 @@ fun PlayerScreen(
     }
 
     val player = remember { buildPlayer() }
+
+    fun seekRelative(deltaMs: Long) {
+        val target = (player.currentPosition + deltaMs).coerceAtLeast(0L)
+        player.seekTo(target)
+        seekFeedback = (if (deltaMs > 0) "+" else "−") + (deltaMs / 1000) + "s"
+    }
+
+    fun togglePlay() {
+        if (player.isPlaying) player.pause() else player.play()
+    }
 
     fun triggerReconnect() {
         connectionFailed = false
@@ -193,6 +209,10 @@ fun PlayerScreen(
                     lastError = null
                 }
             }
+
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
         }
 
         player.addListener(listener)
@@ -209,7 +229,7 @@ fun PlayerScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE || 
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE ||
                 event == androidx.lifecycle.Lifecycle.Event.ON_STOP
             ) {
                 player.pause()
@@ -219,6 +239,36 @@ fun PlayerScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+
+    // Auto-hide controls after a few seconds of inactivity.
+    LaunchedEffect(showControls) {
+        if (showControls) {
+            delay(CONTROLS_TIMEOUT_MS)
+            showControls = false
+        }
+    }
+
+    // Poll playback position while the controls are visible.
+    LaunchedEffect(showControls) {
+        while (showControls) {
+            positionMs = player.currentPosition.coerceAtLeast(0L)
+            durationMs = player.duration.takeIf { it > 0 } ?: 0L
+            delay(500)
+        }
+    }
+
+    // Auto-clear the seek feedback bubble.
+    LaunchedEffect(seekFeedback) {
+        if (seekFeedback != null) {
+            delay(900)
+            seekFeedback = null
+        }
+    }
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 
     Box(
@@ -232,7 +282,7 @@ fun PlayerScreen(
                     showControls = true
                     when (keyEvent.key) {
                         Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-                            if (player.isPlaying) player.pause() else player.play()
+                            togglePlay()
                             true
                         }
                         Key.MediaPlay -> {
@@ -244,11 +294,11 @@ fun PlayerScreen(
                             true
                         }
                         Key.DirectionLeft -> {
-                            player.seekTo((player.currentPosition - 10000).coerceAtLeast(0))
+                            seekRelative(-SEEK_STEP_MS)
                             true
                         }
                         Key.DirectionRight -> {
-                            player.seekTo((player.currentPosition + 10000).coerceAtMost(player.duration))
+                            seekRelative(SEEK_STEP_MS)
                             true
                         }
                         Key.Back, Key.Escape -> {
@@ -266,116 +316,275 @@ fun PlayerScreen(
                 showControls = !showControls
             }
     ) {
+        // ---------- Video surface ----------
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     this.player = player
-                    this.keepScreenOn = true
-                    useController = true
+                    useController = false
+                    keepScreenOn = true
                     this.resizeMode = resizeMode
-                    setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
-                        showControls = (visibility == android.view.View.VISIBLE)
-                    })
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                 }
             },
-            update = { playerView ->
-                playerView.keepScreenOn = true
-                playerView.resizeMode = resizeMode
+            update = { view ->
+                view.player = player
+                view.resizeMode = resizeMode
+                view.keepScreenOn = true
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Top Bar Overlay (Auto-hides with controls)
+        // ---------- Buffering indicator ----------
+        if (!isReconnecting && !connectionFailed && playbackState == Player.STATE_BUFFERING) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(72.dp),
+                color = TvFocusHighlightColor,
+                strokeWidth = 5.dp
+            )
+        }
+
+        // ---------- Controls overlay (auto-hides) ----------
         AnimatedVisibility(
             visible = showControls,
-            enter = fadeIn() + slideInVertically(),
-            exit = fadeOut() + slideOutVertically(),
-            modifier = Modifier.align(Alignment.TopStart)
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200)),
+            modifier = Modifier.fillMaxSize()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Top bar with gradient scrim
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent)
+                            )
+                        )
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = Color.White
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = channel.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = channel.groupTitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
-                
-                IconButton(
-                    onClick = {
-                        resizeMode = when (resizeMode) {
-                            AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                            else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.tvFocusable(shape = CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                                tint = Color.White,
+                                modifier = Modifier.size(30.dp)
+                            )
                         }
-                    },
-                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.AspectRatio,
-                        contentDescription = stringResource(R.string.player_aspect_ratio),
-                        tint = Color.White
-                    )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = channel.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (channel.groupTitle.isNotBlank()) {
+                                Text(
+                                    text = channel.groupTitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        if (durationMs <= 0L) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.error,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.tv_live_badge),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.weight(1f))
 
-                IconButton(
-                    onClick = {
-                        launchExternalPlayer(context, channel.url, channel.name)
-                    },
-                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(24.dp))
+                // Bottom bar with gradient scrim
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
+                            )
+                        )
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = stringResource(R.string.play_with_external_app),
-                        tint = Color.White
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp, vertical = 22.dp)
+                    ) {
+                        // ---------- Progress + times ----------
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = formatMs(positionMs),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.White.copy(alpha = 0.22f))
+                            ) {
+                                val progress =
+                                    if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(progress)
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(Color(0xFF6D5EF0), TvFocusHighlightColor)
+                                            )
+                                        )
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(
+                                text = if (durationMs > 0) formatMs(durationMs) else "—",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // ---------- Control buttons (D-pad friendly) ----------
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ControlButton(
+                                icon = Icons.Filled.FastRewind,
+                                contentDescription = "−10s",
+                                onClick = { seekRelative(-SEEK_STEP_MS) }
+                            )
+                            Spacer(modifier = Modifier.width(24.dp))
+
+                            // Big play/pause button
+                            Surface(
+                                onClick = { togglePlay() },
+                                shape = CircleShape,
+                                color = Color.White,
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .tvFocusable(shape = CircleShape)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        contentDescription = if (isPlaying) stringResource(R.string.playing) else stringResource(R.string.play),
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(42.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(24.dp))
+
+                            ControlButton(
+                                icon = Icons.Filled.FastForward,
+                                contentDescription = "+10s",
+                                onClick = { seekRelative(SEEK_STEP_MS) }
+                            )
+                            Spacer(modifier = Modifier.width(48.dp))
+
+                            ControlButton(
+                                icon = Icons.Filled.AspectRatio,
+                                contentDescription = stringResource(R.string.player_aspect_ratio),
+                                onClick = {
+                                    resizeMode = when (resizeMode) {
+                                        AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                        else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            ControlButton(
+                                icon = Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = stringResource(R.string.play_with_external_app),
+                                onClick = { launchExternalPlayer(context, channel.url, channel.name) }
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // Overlay status indicators
+        // ---------- Seek feedback bubble ----------
+        val feedback = seekFeedback
+        if (feedback != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(bottom = 120.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = Color.Black.copy(alpha = 0.75f),
+                contentColor = Color.White
+            ) {
+                Text(
+                    text = feedback,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp)
+                )
+            }
+        }
+
+        // ---------- Reconnecting overlay ----------
         if (isReconnecting) {
             Surface(
                 modifier = Modifier.align(Alignment.Center),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = Color.Black.copy(alpha = 0.85f),
                 contentColor = Color.White
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    CircularProgressIndicator(color = TvFocusHighlightColor, strokeWidth = 4.dp)
+                    Text(
+                        text = channel.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Text(
                         text = stringResource(R.string.reconnecting_count, retryCount),
                         style = MaterialTheme.typography.bodyMedium,
@@ -386,15 +595,22 @@ fun PlayerScreen(
         } else if (connectionFailed) {
             Surface(
                 modifier = Modifier.align(Alignment.Center),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.Black.copy(alpha = 0.9f),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.Black.copy(alpha = 0.92f),
                 contentColor = Color.White
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    Text(
+                        text = channel.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Text(
                         text = stringResource(R.string.reconnect_failed),
                         style = MaterialTheme.typography.bodyMedium,
@@ -408,42 +624,65 @@ fun PlayerScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.8f),
                             maxLines = 4,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    Button(
-                        onClick = {
-                            retryCount = 0
-                            triggerReconnect()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.tvFocusable()
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.retry))
-                    }
-
-                    Button(
-                        onClick = {
-                            launchExternalPlayer(context, channel.url, channel.name)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        modifier = Modifier.tvFocusable()
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.player_try_external_app))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Button(
+                            onClick = {
+                                retryCount = 0
+                                triggerReconnect()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.tvFocusable()
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.retry), fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = {
+                                launchExternalPlayer(context, channel.url, channel.name)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            modifier = Modifier.tvFocusable()
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.player_try_external_app), fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
-        } else if (playbackState == Player.STATE_BUFFERING) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.White
+        }
+    }
+}
+
+@Composable
+private fun ControlButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White.copy(alpha = 0.14f),
+        modifier = Modifier
+            .size(66.dp)
+            .tvFocusable(shape = RoundedCornerShape(18.dp))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = Color.White,
+                modifier = Modifier.size(30.dp)
             )
         }
     }

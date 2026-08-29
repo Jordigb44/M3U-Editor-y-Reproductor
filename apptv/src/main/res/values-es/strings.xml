@@ -132,4 +132,5 @@
     <string name="tv_channel_multiselect_hint">Pulsa OK en cada canal para seleccionarlo</string>
     <string name="tv_channels_selected_count">%1$d canales seleccionados</string>
     <string name="tv_delete_channels_confirm">¿Eliminar %1$d canales seleccionados?</string>
+    <string name="tv_live_badge">EN DIRECTO</string>
 </resources>
