@@ -40,6 +40,18 @@ El proyecto contiene **dos aplicaciones independientes que comparten toda la ló
 ./gradlew :app:testDebugUnitTest    # Tests unitarios (parser M3U + Robolectric)
 ```
 
+## Instalación y actualizaciones
+
+- **Instala builds de release** (los APK de las [releases](https://github.com/Jordigb44/M3U-Editor-y-Reproductor/releases),
+  firmados con la clave de producción). Son las que permiten el **sistema de actualización integrado**:
+  la app comprueba GitHub Releases y ofrece instalar la nueva versión automáticamente.
+- **Importante**: todas las releases usan la **misma clave de firma**, así que las actualizaciones
+  integradas se instalan encima sin desinstalar.
+- Si estabas usando una **build de debug** (se firma con `debug.keystore`, una clave distinta) y ahora
+  instalas una release, Android muestra **"App not installed as package conflicts with an existing
+  package"**. Solución: **desinstala** la app actual y vuelve a instalar el APK release. (La primera vez
+  que pasas de debug → release se pierden las listas guardadas; después las actualizaciones son sin pérdida).
+
 ## Notas
 
 - La versión **release** requiere un keystore y las variables `KEYSTORE_PATH`,
