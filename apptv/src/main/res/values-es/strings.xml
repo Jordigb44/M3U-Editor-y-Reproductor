@@ -124,4 +124,8 @@
     <string name="tv_load_demo">LISTA DEMO</string>
     <string name="tv_manage_groups">GESTIONAR GRUPOS</string>
     <string name="tv_delete_group_confirm">¿Eliminar el grupo \"%1$s\" y todos sus canales?</string>
+    <string name="tv_group_multiselect">SELECCIÓN MÚLTIPLE</string>
+    <string name="tv_group_multiselect_hint">Pulsa OK en cada grupo para seleccionarlo</string>
+    <string name="tv_groups_selected_count">%1$d grupos seleccionados</string>
+    <string name="tv_delete_groups_confirm">¿Eliminar %1$d grupos y todos sus canales?</string>
 </resources>

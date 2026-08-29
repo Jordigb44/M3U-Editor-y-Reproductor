@@ -96,6 +96,8 @@ fun EditorScreen(
     var playingChannel by remember { mutableStateOf<Channel?>(null) }
     var searchVisible by remember { mutableStateOf(false) }
     var selectMode by remember { mutableStateOf(false) }
+    var groupSelectMode by remember { mutableStateOf(false) }
+    var showDeleteGroupsConfirm by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showPlayerSettingsDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
@@ -113,6 +115,8 @@ fun EditorScreen(
             viewModel.clearSelection()
         } else if (state.selectedGroups.isNotEmpty()) {
             viewModel.clearGroupSelection()
+        } else if (groupSelectMode) {
+            groupSelectMode = false
         } else {
             onBack()
         }
@@ -278,77 +282,178 @@ fun EditorScreen(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                // Left: group filter panel
+                // Left: group panel (filter + mass selection)
                 Column(
                     modifier = Modifier
                         .width(320.dp)
                         .fillMaxHeight()
                         .padding(start = 16.dp, top = 16.dp, end = 8.dp, bottom = 16.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.groups),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(R.string.groups),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        FilterChip(
+                            selected = groupSelectMode,
+                            onClick = {
+                                groupSelectMode = !groupSelectMode
+                                if (!groupSelectMode) viewModel.clearGroupSelection()
+                            },
+                            label = { Text(stringResource(R.string.tv_group_multiselect), style = MaterialTheme.typography.labelMedium) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (groupSelectMode) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(16.dp))
+                        )
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(bottom = 8.dp)
-                    ) {
-                        item(key = "all_groups") {
-                            GroupChip(
-                                label = stringResource(R.string.all_groups),
-                                count = state.channels.size,
-                                selected = state.selectedGroup == null,
-                                onClick = { viewModel.selectGroup(null) }
-                            )
+                    if (groupSelectMode) {
+                        // -------- Mass selection mode --------
+                        Text(
+                            text = stringResource(R.string.tv_group_multiselect_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 8.dp)
+                        ) {
+                            item(key = "select_all_groups") {
+                                GroupChip(
+                                    label = stringResource(R.string.select_all),
+                                    count = state.groups.size,
+                                    countText = stringResource(R.string.groups_count, state.groups.size),
+                                    selected = state.groups.isNotEmpty() && state.groups.all { state.selectedGroups.contains(it) },
+                                    onClick = { viewModel.toggleSelectAllGroups(state.groups) }
+                                )
+                            }
+                            items(state.groups, key = { it }) { group ->
+                                GroupChip(
+                                    label = group,
+                                    count = state.channels.count { it.groupTitle == group },
+                                    selected = state.selectedGroups.contains(group),
+                                    onClick = { viewModel.toggleGroupSelection(group) }
+                                )
+                            }
                         }
-                        items(state.groups, key = { it }) { group ->
-                            GroupChip(
-                                label = group,
-                                count = state.channels.count { it.groupTitle == group },
-                                selected = state.selectedGroup == group,
-                                onClick = { viewModel.selectGroup(group) }
-                            )
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { showGroupManageDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .tvFocusable(shape = RoundedCornerShape(16.dp)),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = stringResource(R.string.tv_groups_selected_count, state.selectedGroups.size),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (state.selectedGroups.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    ) {
-                        Text(stringResource(R.string.tv_manage_groups), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = { showAddGroupDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .tvFocusable(shape = RoundedCornerShape(16.dp)),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(22.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.add_new_group), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { showDeleteGroupsConfirm = true },
+                            enabled = state.selectedGroups.isNotEmpty(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .tvFocusable(shape = RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.delete_groups), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { viewModel.clearGroupSelection() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .tvFocusable(shape = RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.clear_selection), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        // -------- Filter mode --------
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 8.dp)
+                        ) {
+                            item(key = "all_groups") {
+                                GroupChip(
+                                    label = stringResource(R.string.all_groups),
+                                    count = state.channels.size,
+                                    selected = state.selectedGroup == null,
+                                    onClick = { viewModel.selectGroup(null) }
+                                )
+                            }
+                            items(state.groups, key = { it }) { group ->
+                                GroupChip(
+                                    label = group,
+                                    count = state.channels.count { it.groupTitle == group },
+                                    selected = state.selectedGroup == group,
+                                    onClick = { viewModel.selectGroup(group) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { showGroupManageDialog = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .tvFocusable(shape = RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text(stringResource(R.string.tv_manage_groups), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = { showAddGroupDialog = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .tvFocusable(shape = RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.add_new_group), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -536,6 +641,50 @@ fun EditorScreen(
                 },
                 onAdd = { name -> viewModel.addNewGroup(name, context) },
                 onDismiss = { showGroupManageDialog = false }
+            )
+        }
+
+        // ---------- Delete selected groups (mass) ----------
+        if (showDeleteGroupsConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteGroupsConfirm = false },
+                title = {
+                    Text(
+                        text = stringResource(R.string.delete_groups),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                },
+                text = {
+                    Text(
+                        text = stringResource(R.string.tv_delete_groups_confirm, state.selectedGroups.size),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteSelectedGroups(context)
+                            showDeleteGroupsConfirm = false
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
+                        modifier = Modifier.tvFocusable()
+                    ) {
+                        Text(stringResource(R.string.delete), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteGroupsConfirm = false },
+                        modifier = Modifier.tvFocusable()
+                    ) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
             )
         }
 
@@ -729,7 +878,8 @@ private fun GroupChip(
     label: String,
     count: Int,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    countText: String? = null
 ) {
     Surface(
         onClick = onClick,
@@ -760,7 +910,7 @@ private fun GroupChip(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.channels_count, count),
+                    text = countText ?: stringResource(R.string.channels_count, count),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
