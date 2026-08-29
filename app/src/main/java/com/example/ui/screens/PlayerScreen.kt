@@ -61,7 +61,7 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.example.R
+import com.jordiguixbetancor.m3ueditor.R
 import com.example.data.Channel
 import com.example.data.EpgLoader
 import com.example.data.EpgProgram

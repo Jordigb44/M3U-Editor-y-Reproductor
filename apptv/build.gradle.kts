@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-  namespace = "com.example.tv"
+  namespace = "com.jordiguixbetancor.m3ueditor.tv"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.m3ueditor.tv"
+    applicationId = "com.jordiguixbetancor.m3ueditor.tv"
     minSdk = 24
     targetSdk = 36
     versionCode = 1

@@ -22,7 +22,7 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "M3U Editor"
+rootProject.name = "M3U Editor y Reproductor"
 
 include(":core")
 include(":app")

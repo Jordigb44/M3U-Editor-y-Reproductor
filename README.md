@@ -1,4 +1,4 @@
-# M3U Editor — Pepe Editor / Pepe Editor TV
+# M3U Editor — M3U Editor y Reproductor / M3U Editor y Reproductor TV
 
 Gestor de listas IPTV **M3U / M3U8**: carga por URL o archivo, gestión masiva de canales y
 grupos, búsqueda, exportación y reproducción integrada (ExoPlayer) o con apps externas.
@@ -7,8 +7,8 @@ El proyecto contiene **dos aplicaciones independientes que comparten toda la ló
 
 | App | Módulo | Público | applicationId |
 |---|---|---|---|
-| **Pepe Editor** (móvil) | `:app` | Teléfono/táctil — interfaz actual, fácil de usar | `com.aistudio.m3ueditor.abcde` |
-| **Pepe Editor TV** (TV box) | `:apptv` | Android TV / Fire TV — UI de 10 pies rediseñada desde cero (D-pad, leanback) | `com.aistudio.m3ueditor.tv` |
+| **M3U Editor y Reproductor** (móvil) | `:app` | Teléfono/táctil — interfaz actual, fácil de usar | `com.jordiguixbetancor.m3ueditor` |
+| **M3U Editor y Reproductor TV** (TV box) | `:apptv` | Android TV / Fire TV — UI de 10 pies rediseñada desde cero (D-pad, leanback) | `com.jordiguixbetancor.m3ueditor.tv` |
 | **Lógica compartida** | `:core` | Parser M3U, modelos, red (OkHttp) y `EditorViewModel` | — |
 
 ## Funciones (idénticas en ambas apps)

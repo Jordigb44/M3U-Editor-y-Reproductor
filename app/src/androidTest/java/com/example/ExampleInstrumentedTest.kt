@@ -15,6 +15,6 @@ class ExampleInstrumentedTest {
   fun useAppContext() {
     // Context of the app under test.
     val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-    assertEquals("com.aistudio.m3ueditor.abcde", appContext.packageName)
+    assertEquals("com.jordiguixbetancor.m3ueditor", appContext.packageName)
   }
 }

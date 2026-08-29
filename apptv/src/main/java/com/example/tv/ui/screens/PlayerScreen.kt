@@ -72,7 +72,7 @@ import com.example.data.EpgLoader
 import com.example.data.EpgProgram
 import com.example.data.XmltvParser
 import com.example.tv.PlayerKeyRouter
-import com.example.tv.R
+import com.jordiguixbetancor.m3ueditor.tv.R
 import com.example.tv.ui.components.TvFocusHighlightColor
 import com.example.tv.ui.components.tvFocusable
 import com.example.tv.ui.components.tvRing

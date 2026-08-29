@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Pepe Editor</string>
+    <string name="app_name">M3U Editor y Reproductor</string>
     <string name="upload_file">CARGAR ARCHIVO</string>
     <string name="or">O</string>
     <string name="playlist_url_placeholder">URL de la lista</string>
@@ -69,7 +69,7 @@
     <!-- EditorScreen -->
     <string name="editor_with_name">Editor - %1$s</string>
     <string name="editor_default_player">Reproductor por defecto</string>
-    <string name="editor_write_permission_denied">Permiso de escritura denegado. Ve a Configuración > Aplicaciones > Pepe Editor > Permisos y activa Almacenamiento.</string>
+    <string name="editor_write_permission_denied">Permiso de escritura denegado. Ve a Configuración > Aplicaciones > M3U Editor y Reproductor > Permisos y activa Almacenamiento.</string>
     <string name="ungrouped">Sin Grupo</string>
     <string name="filter_by_group">FILTRAR POR GRUPO</string>
     <string name="search_group_placeholder">Buscar grupo...</string>
@@ -82,7 +82,7 @@
     <!-- DefaultPlayerDialog -->
     <string name="player_dialog_title">REPRODUCTOR POR DEFECTO</string>
     <string name="player_dialog_subtitle">Elige la app con la que deseas reproducir los canales al hacer clic:</string>
-    <string name="player_dialog_integrated_title">📺 Reproductor Integrado (Pepe Editor)</string>
+    <string name="player_dialog_integrated_title">📺 Reproductor Integrado (M3U Editor y Reproductor)</string>
     <string name="player_dialog_integrated_desc">Reconexión automática 5x, pantalla completa.</string>
     <string name="player_dialog_ask_title">❓ Preguntar Siempre al Hacer Clic</string>
     <string name="player_dialog_ask_desc">Muestra una ventana para elegir el reproductor en cada clic.</string>

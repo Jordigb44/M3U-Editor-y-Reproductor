@@ -32,7 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.example.R
+import com.jordiguixbetancor.m3ueditor.R
 import com.example.data.Channel
 import com.example.ui.DefaultPlayerMode
 import com.example.ui.EditorState

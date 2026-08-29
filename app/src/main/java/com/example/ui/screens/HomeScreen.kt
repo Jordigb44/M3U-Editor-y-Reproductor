@@ -34,7 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.example.R
+import com.jordiguixbetancor.m3ueditor.R
 import com.example.data.SavedPlaylist
 import com.example.ui.EditorState
 import com.example.ui.components.FilePickerDialog

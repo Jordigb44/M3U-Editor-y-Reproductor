@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Pepe Editor TV</string>
+    <string name="app_name">M3U Editor y Reproductor</string>
     <string name="upload_file">UPLOAD FILE</string>
     <string name="or">OR</string>
     <string name="playlist_url_placeholder">Playlist URL</string>
@@ -69,7 +69,7 @@
     <!-- EditorScreen -->
     <string name="editor_with_name">Editor - %1$s</string>
     <string name="editor_default_player">Default player</string>
-    <string name="editor_write_permission_denied">Write permission denied. Go to Settings > Apps > Pepe Editor > Permissions and enable Storage.</string>
+    <string name="editor_write_permission_denied">Write permission denied. Go to Settings > Apps > M3U Editor y Reproductor > Permissions and enable Storage.</string>
     <string name="ungrouped">Ungrouped</string>
     <string name="filter_by_group">FILTER BY GROUP</string>
     <string name="search_group_placeholder">Search group...</string>
@@ -82,7 +82,7 @@
     <!-- DefaultPlayerDialog -->
     <string name="player_dialog_title">DEFAULT PLAYER</string>
     <string name="player_dialog_subtitle">Choose the app you want to use to play channels when you click:</string>
-    <string name="player_dialog_integrated_title">📺 Built-in Player (Pepe Editor)</string>
+    <string name="player_dialog_integrated_title">📺 Built-in Player (M3U Editor y Reproductor)</string>
     <string name="player_dialog_integrated_desc">Automatic 5x reconnection, full screen.</string>
     <string name="player_dialog_ask_title">❓ Always Ask When Clicking</string>
     <string name="player_dialog_ask_desc">Shows a window to choose the player on each click.</string>
