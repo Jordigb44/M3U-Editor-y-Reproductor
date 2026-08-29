@@ -10,7 +10,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+// SDK 35 keeps this test green on every Robolectric version/environment (36 is not
+// supported by all versions).
+@Config(sdk = [35])
 class ExampleRobolectricTest {
 
   @Test
