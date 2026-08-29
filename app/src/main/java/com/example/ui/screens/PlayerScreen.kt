@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -36,6 +37,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -45,6 +47,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -56,6 +59,10 @@ import com.example.R
 import com.example.data.Channel
 import com.example.ui.components.dpadFocusable
 import kotlinx.coroutines.delay
+
+/** Browser-like User-Agent so IPTV servers/CDNs accept the stream requests. */
+private const val PLAYER_USER_AGENT =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 @OptIn(UnstableApi::class)
 class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErrorHandlingPolicy() {
@@ -76,6 +83,9 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+
+    // Back always closes the player and returns to the editor, regardless of focus.
+    BackHandler(onBack = onBack)
 
     // Prevent screen dimming or sleep mode during video playback
     DisposableEffect(Unit) {
@@ -101,6 +111,7 @@ fun PlayerScreen(
     var retryCount by remember { mutableIntStateOf(0) }
     var isReconnecting by remember { mutableStateOf(false) }
     var connectionFailed by remember { mutableStateOf(false) }
+    var lastError by remember { mutableStateOf<String?>(null) }
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
     
     var showControls by remember { mutableStateOf(true) }
@@ -129,7 +140,16 @@ fun PlayerScreen(
             )
             .build()
 
+        // Browser User-Agent + cross-protocol redirects (https->http) are required by many
+        // IPTV servers/CDNs; without them valid channels show a black screen.
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(PLAYER_USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(30_000)
+
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(httpDataSourceFactory)
             .setLoadErrorHandlingPolicy(FastReconnectErrorPolicy(maxRetries))
 
         return ExoPlayer.Builder(context)
@@ -151,6 +171,7 @@ fun PlayerScreen(
     DisposableEffect(channel.url) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                lastError = error.errorCodeName + ": " + (error.message ?: "")
                 if (retryCount < maxRetries) {
                     retryCount++
                     isReconnecting = true
@@ -169,6 +190,7 @@ fun PlayerScreen(
                     retryCount = 0
                     isReconnecting = false
                     connectionFailed = false
+                    lastError = null
                 }
             }
         }
@@ -379,6 +401,16 @@ fun PlayerScreen(
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Bold
                     )
+                    val errorDetail = lastError
+                    if (errorDetail != null) {
+                        Text(
+                            text = errorDetail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.8f),
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Button(
                         onClick = {
                             retryCount = 0
