@@ -15,7 +15,6 @@
 .cxx
 local.properties
 .env
-debug.keystore
 /build
 .antigravity
 /screenshot_export_error.png
