@@ -17,10 +17,11 @@ android {
 }
 
 // Shared business logic for both apps (mobile "Pepe Editor" and "Pepe Editor TV"):
-// M3U parser, channel/playlist models, networking and the EditorViewModel.
+// M3U parser, channel/playlist models, networking, EditorViewModel and player tuning.
 dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.ktx)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.okhttp)
+  implementation(libs.androidx.media3.exoplayer)
 }

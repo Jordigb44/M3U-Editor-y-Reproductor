@@ -55,7 +55,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
@@ -67,6 +66,7 @@ import com.example.data.Channel
 import com.example.data.EpgLoader
 import com.example.data.EpgProgram
 import com.example.data.XmltvParser
+import com.example.ui.AdaptiveLoadControl
 import com.example.ui.components.dpadFocusable
 import kotlinx.coroutines.delay
 
@@ -173,14 +173,9 @@ fun PlayerScreen(
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
 
     fun buildPlayer(): ExoPlayer {
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                1000,
-                5000,
-                500,
-                1000
-            )
-            .build()
+        // Dynamic buffer: grows after every rebuffer to ride out network jitter and
+        // avoid micro-freezes on unstable IPTV streams.
+        val loadControl = AdaptiveLoadControl()
 
         // Browser User-Agent + cross-protocol redirects (https->http) are required by many
         // IPTV servers/CDNs; without them valid channels show a black screen.
