@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "M3U Editor"
 
+include(":core")
 include(":app")
+include(":apptv")

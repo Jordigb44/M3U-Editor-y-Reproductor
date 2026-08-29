@@ -19,3 +19,6 @@ debug.keystore
 /build
 .antigravity
 /screenshot_export_error.png
+
+# Local Gradle user home left by tooling (build cache)
+.gradle-home

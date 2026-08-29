@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml:2:13-83
+INJECTED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml:2:13-83
+	package
+		INJECTED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml
+	xmlns:android
+		ADDED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml:2:23-81
+uses-sdk
+INJECTED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml reason: use-sdk injection requested
+INJECTED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml
+INJECTED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml
+	android:targetSdkVersion
+		INJECTED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml
+	android:minSdkVersion
+		INJECTED from /Users/admin/antigravity/M3U-Editor-2026-08-18-94fbc/core/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15149007866365227391.xml

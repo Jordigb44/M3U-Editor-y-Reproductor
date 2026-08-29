@@ -444,7 +444,8 @@ fun HomeScreen(
         }
 
         // Descriptive Error Dialog
-        if (state.error != null) {
+        val currentError = state.error
+        if (currentError != null) {
             AlertDialog(
                 onDismissRequest = onErrorDismiss,
                 title = {
@@ -457,7 +458,7 @@ fun HomeScreen(
                 },
                 text = {
                     Text(
-                        text = state.error,
+                        text = currentError,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
