@@ -146,6 +146,7 @@ fun HomeScreen(
     var checkingUpdate by remember { mutableStateOf(false) }
     var downloadingUpdate by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
+    var showUnknownSourcesInfo by remember { mutableStateOf(false) }
 
     suspend fun fetchUpdate(): UpdateInfo? = AppUpdater.checkLatest(
         repo = UPDATE_REPO,
@@ -643,6 +644,8 @@ fun HomeScreen(
                             updateInfo = null
                             if (url == null) {
                                 Toast.makeText(context, context.getString(R.string.update_install_error), Toast.LENGTH_LONG).show()
+                            } else if (!AppUpdater.canInstall(context)) {
+                                showUnknownSourcesInfo = true
                             } else {
                                 updateScope.launch {
                                     downloadingUpdate = true
@@ -667,6 +670,38 @@ fun HomeScreen(
                 dismissButton = {
                     TextButton(
                         onClick = { updateInfo = null },
+                        modifier = Modifier.dpadFocusable()
+                    ) {
+                        Text(stringResource(R.string.update_not_now))
+                    }
+                }
+            )
+        }
+
+        // ---------- Unknown sources permission dialog ----------
+        if (showUnknownSourcesInfo) {
+            AlertDialog(
+                onDismissRequest = { showUnknownSourcesInfo = false },
+                title = {
+                    Text(stringResource(R.string.update_check), fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text(stringResource(R.string.update_need_unknown_sources), style = MaterialTheme.typography.bodyMedium)
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showUnknownSourcesInfo = false
+                            AppUpdater.openInstallPermissionSettings(context)
+                        },
+                        modifier = Modifier.dpadFocusable()
+                    ) {
+                        Text(stringResource(R.string.update_open_settings), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showUnknownSourcesInfo = false },
                         modifier = Modifier.dpadFocusable()
                     ) {
                         Text(stringResource(R.string.update_not_now))

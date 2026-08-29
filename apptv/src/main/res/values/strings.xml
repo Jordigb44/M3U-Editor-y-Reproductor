@@ -148,4 +148,6 @@
     <string name="update_install_error">Could not start the installer. You can open the APK manually.</string>
     <string name="update_up_to_date">You have the latest version (%1$s).</string>
     <string name="app_version">Version %1$s</string>
+    <string name="update_need_unknown_sources">To install the update, allow \'Install unknown apps\' for this app in Settings.</string>
+    <string name="update_open_settings">OPEN SETTINGS</string>
 </resources>

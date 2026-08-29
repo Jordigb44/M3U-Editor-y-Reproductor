@@ -2,6 +2,8 @@ package com.example.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -131,6 +133,27 @@ object AppUpdater {
             target
         } catch (_: Exception) {
             null
+        }
+    }
+
+    /** True if this app is allowed to install packages via ACTION_VIEW. */
+    fun canInstall(context: Context): Boolean =
+        context.packageManager.canRequestPackageInstalls()
+
+    /** Opens the "Install unknown apps" settings page for this app. */
+    fun openInstallPermissionSettings(context: Context) {
+        try {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}")
+            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                    .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                context.startActivity(intent)
+            } catch (_: Exception) {}
         }
     }
 

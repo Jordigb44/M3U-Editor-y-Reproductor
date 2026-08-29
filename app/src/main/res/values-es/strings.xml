@@ -132,4 +132,6 @@
     <string name="update_install_error">No se pudo abrir el instalador. Puedes abrir el APK manualmente.</string>
     <string name="update_up_to_date">Tienes la última versión (%1$s).</string>
     <string name="app_version">Versión %1$s</string>
+    <string name="update_need_unknown_sources">Para instalar la actualización, permite \'Instalar apps desconocidas\' para esta app en Ajustes.</string>
+    <string name="update_open_settings">ABRIR AJUSTES</string>
 </resources>
