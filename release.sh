@@ -37,7 +37,7 @@ KEYSTORE_PATH="$(pwd)/my-upload-key.jks" STORE_PASSWORD="$PASS" KEY_PASSWORD="$P
 ls -la app/build/outputs/apk/release/app-release.apk apptv/build/outputs/apk/release/apptv-release.apk
 
 echo "== Committing and tagging v$VERSION =="
-git add app/build.gradle.kts apptv/build.gradle.kts
+git add -A
 git commit -m "Bump version to $VERSION"
 git tag "v$VERSION"
 git push origin main

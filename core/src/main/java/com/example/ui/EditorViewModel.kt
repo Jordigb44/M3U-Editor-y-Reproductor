@@ -18,12 +18,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.OutputStreamWriter
 import java.net.URL
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLException
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 enum class DefaultPlayerMode {
     INTERNAL,
@@ -99,6 +106,62 @@ class EditorViewModel : ViewModel() {
                 chain.proceed(request)
             }
             .build()
+    }
+
+    /** Lenient client used only as a fallback when a playlist's TLS certificate chain is
+     *  rejected (common with IPTV providers, proxies or devices with clock issues). */
+    private val lenientClient: OkHttpClient by lazy { createLenientOkHttpClient() }
+
+    private fun createLenientOkHttpClient(): OkHttpClient {
+        return try {
+            val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            })
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAll, SecureRandom())
+            OkHttpClient.Builder()
+                .sslSocketFactory(sslContext.socketFactory, trustAll[0] as X509TrustManager)
+                .hostnameVerifier { _, _ -> true }
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .addInterceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                        .header("Accept", "*/*")
+                        .build()
+                    chain.proceed(request)
+                }
+                .build()
+        } catch (_: Exception) {
+            client
+        }
+    }
+
+    /** Executes with strict validation; on a TLS/cert error retries once leniently. */
+    private fun executeWithFallback(request: Request): Response {
+        return try {
+            client.newCall(request).execute()
+        } catch (e: Exception) {
+            if (isTrustError(e)) {
+                lenientClient.newCall(request).execute()
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun isTrustError(e: Exception): Boolean {
+        val msg = e.message ?: ""
+        return e is SSLException ||
+            msg.contains("trust anchor", ignoreCase = true) ||
+            msg.contains("certificate", ignoreCase = true) ||
+            msg.contains("cert", ignoreCase = true) && msg.contains("path", ignoreCase = true) ||
+            msg.contains("PKIX", ignoreCase = true) ||
+            msg.contains("SSL", ignoreCase = true)
     }
 
     /** Derived group list: only recomputed when channels or custom groups actually change
@@ -500,8 +563,7 @@ class EditorViewModel : ViewModel() {
             .url(urlStr)
             .build()
 
-        val response = client.newCall(request).execute()
-        response.use {
+        executeWithFallback(request).use {
             if (!it.isSuccessful) {
                 throw Exception("HTTP ${it.code}: ${it.message.ifBlank { "Error al descargar la lista" }}")
             }
