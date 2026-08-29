@@ -200,6 +200,12 @@ fun HomeScreen(
                             modifier = Modifier.size(56.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 

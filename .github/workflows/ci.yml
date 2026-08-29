@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK 36
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" >/dev/null
+          yes | sdkmanager --licenses >/dev/null || true
+
+      # The secrets gradle plugin expects a .env file (gitignored).
+      - name: Touch .env
+        run: touch .env
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build mobile (debug)
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Build TV (debug)
+        run: ./gradlew :apptv:assembleDebug --no-daemon
