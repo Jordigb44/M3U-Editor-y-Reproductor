@@ -648,25 +648,34 @@ class EditorViewModel : ViewModel() {
                 val safeName = fileName.ifBlank { "playlist_editada.m3u" }
                 val header = currentHeader
                 val savedPath = withContext(Dispatchers.IO) {
-                    // If a specific folder was provided by the user, write there directly (File API)
+                    var savedFileLocation = ""
+
+                    // Stage 1: Try writing to user's chosen folder if provided
                     if (!folderPath.isNullOrBlank()) {
-                        val dir = File(folderPath).apply { mkdirs() }
-                        val file = File(dir, safeName)
-                        writeM3uFile(file, _channels.value, header)
-                        return@withContext file.absolutePath
+                        try {
+                            val dir = File(folderPath).apply { mkdirs() }
+                            val file = File(dir, safeName)
+                            writeM3uFile(file, _channels.value, header)
+                            savedFileLocation = file.absolutePath
+                        } catch (e: Exception) {
+                            Log.w("EditorViewModel", "Failed to write directly to $folderPath: ${e.message}")
+                        }
                     }
 
-                    // Default: write to Downloads via File API (works on Fire TV SDK 28)
-                    var savedFileLocation = ""
-                    try {
-                        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-                        downloadsDir.mkdirs()
-                        val file = File(downloadsDir, safeName)
-                        writeM3uFile(file, _channels.value, header)
-                        savedFileLocation = file.absolutePath
-                    } catch (_: Exception) {}
+                    // Stage 2: Try standard Downloads directory
+                    if (savedFileLocation.isBlank()) {
+                        try {
+                            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                            downloadsDir.mkdirs()
+                            val file = File(downloadsDir, safeName)
+                            writeM3uFile(file, _channels.value, header)
+                            savedFileLocation = file.absolutePath
+                        } catch (e: Exception) {
+                            Log.w("EditorViewModel", "Failed to write to public Downloads: ${e.message}")
+                        }
+                    }
 
-                    // Fallback to MediaStore (Android 10+)
+                    // Stage 3: Try MediaStore insertion (Android 10+ / API 29+) - Requires 0 permissions!
                     if (savedFileLocation.isBlank() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         try {
                             val contentValues = android.content.ContentValues().apply {
@@ -687,23 +696,34 @@ class EditorViewModel : ViewModel() {
                                 }
                                 savedFileLocation = "Descargas / $safeName"
                             }
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            Log.w("EditorViewModel", "Failed to write to MediaStore: ${e.message}")
+                        }
                     }
 
-                    // Last resort: app private dir
+                    // Stage 4: App External Files directory (Always writable without permissions on all Android versions)
                     if (savedFileLocation.isBlank()) {
-                        val appExtDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-                        appExtDir.mkdirs()
-                        val fallbackFile = File(appExtDir, safeName)
-                        writeM3uFile(fallbackFile, _channels.value, header)
-                        savedFileLocation = fallbackFile.absolutePath
+                        try {
+                            val appExtDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+                            appExtDir.mkdirs()
+                            val fallbackFile = File(appExtDir, safeName)
+                            writeM3uFile(fallbackFile, _channels.value, header)
+                            savedFileLocation = fallbackFile.absolutePath
+                        } catch (e: Exception) {
+                            Log.e("EditorViewModel", "Failed to write to app external files dir: ${e.message}")
+                        }
                     }
 
                     savedFileLocation
                 }
-                onSuccess(savedPath)
+
+                if (savedPath.isNotBlank()) {
+                    onSuccess(savedPath)
+                } else {
+                    onError("No se pudo escribir el archivo. Verifica los permisos de almacenamiento de tu dispositivo.")
+                }
             } catch (e: Exception) {
-                onError(e.localizedMessage ?: "Error al guardar la lista")
+                onError("Error al exportar: ${e.localizedMessage ?: e.message}")
             } finally {
                 _isLoading.value = false
             }

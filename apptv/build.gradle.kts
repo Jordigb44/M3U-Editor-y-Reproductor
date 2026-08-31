@@ -11,8 +11,8 @@ android {
     applicationId = "com.jordiguixbetancor.m3ueditor.tv"
     minSdk = 24
     targetSdk = 36
-    versionCode = 11
-    versionName = "1.0.9"
+    versionCode = 12
+    versionName = "1.0.10"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
