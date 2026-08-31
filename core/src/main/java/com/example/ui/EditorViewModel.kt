@@ -96,12 +96,15 @@ class EditorViewModel : ViewModel() {
         return OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(180, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val request = chain.request().newBuilder()
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                    .header("User-Agent", "IPTVSmartersPlayer/1.0.0 (Linux; Android)")
                     .header("Accept", "*/*")
+                    .header("Connection", "keep-alive")
                     .build()
                 chain.proceed(request)
             }
@@ -126,12 +129,15 @@ class EditorViewModel : ViewModel() {
                 .hostnameVerifier { _, _ -> true }
                 .followRedirects(true)
                 .followSslRedirects(true)
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .callTimeout(180, TimeUnit.SECONDS)
                 .addInterceptor { chain ->
                     val request = chain.request().newBuilder()
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                        .header("User-Agent", "IPTVSmartersPlayer/1.0.0 (Linux; Android)")
                         .header("Accept", "*/*")
+                        .header("Connection", "keep-alive")
                         .build()
                     chain.proceed(request)
                 }
@@ -141,13 +147,21 @@ class EditorViewModel : ViewModel() {
         }
     }
 
-    /** Executes with strict validation; on a TLS/cert error retries once leniently. */
+    /** Executes with strict validation; on a TLS/cert error retries once leniently. Also retries once on connection timeout. */
     private fun executeWithFallback(request: Request): Response {
         return try {
             client.newCall(request).execute()
         } catch (e: Exception) {
             if (isTrustError(e)) {
                 lenientClient.newCall(request).execute()
+            } else if (e is java.net.SocketTimeoutException || e is java.net.ConnectException) {
+                // Retry once with lenient client on timeout
+                try {
+                    Thread.sleep(1000)
+                    lenientClient.newCall(request).execute()
+                } catch (_: Exception) {
+                    throw e
+                }
             } else {
                 throw e
             }
