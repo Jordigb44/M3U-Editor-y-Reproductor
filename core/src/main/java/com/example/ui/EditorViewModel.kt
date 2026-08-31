@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.Channel
@@ -413,7 +414,11 @@ class EditorViewModel : ViewModel() {
                 if (!targetUrl.startsWith("http://", ignoreCase = true) &&
                     !targetUrl.startsWith("https://", ignoreCase = true)
                 ) {
-                    targetUrl = "https://$targetUrl"
+                    targetUrl = if (targetUrl.contains(":8080") || targetUrl.contains(":8000") || targetUrl.contains(":80") || targetUrl.contains(":30000")) {
+                        "http://$targetUrl"
+                    } else {
+                        "https://$targetUrl"
+                    }
                 }
 
                 val parsedM3u = withContext(Dispatchers.IO) {
@@ -450,13 +455,69 @@ class EditorViewModel : ViewModel() {
                     val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
                     prefs.edit().putString("active_playlist_id", newPlaylist.id).apply()
                 } else {
-                    _error.value = "La URL no contiene una lista M3U válida o está vacía."
+                    _error.value = "No se encontraron canales válidos en la lista IPTV."
                 }
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: e.message ?: "Error al descargar desde la URL"
+                Log.e("EditorViewModel", "Failed to load from URL: $urlString", e)
+                val rawMsg = e.localizedMessage ?: e.message ?: "Error al descargar la lista"
+                _error.value = when {
+                    rawMsg.contains("15000ms", ignoreCase = true) || rawMsg.contains("timeout", ignoreCase = true) || rawMsg.contains("timed out", ignoreCase = true) ->
+                        "Tiempo de espera agotado al conectar al servidor IPTV. Inténtalo de nuevo."
+                    rawMsg.contains("Failed to connect", ignoreCase = true) || rawMsg.contains("Connection refused", ignoreCase = true) ->
+                        "No se pudo conectar al servidor IPTV. Comprueba si la URL es correcta o si el servidor está caído."
+                    else -> rawMsg
+                }
             } finally {
                 _isLoading.value = false
             }
+        }
+    }
+
+    private suspend fun fetchAndParseM3u(urlStr: String): ParsedM3u = withContext(Dispatchers.IO) {
+        var currentUrl = urlStr
+        var response: Response? = null
+        var redirectCount = 0
+
+        while (redirectCount < 5) {
+            val request = Request.Builder()
+                .url(currentUrl)
+                .build()
+
+            val res = executeWithFallback(request)
+            if (res.isRedirect) {
+                val location = res.header("Location")
+                res.close()
+                if (!location.isNullOrBlank()) {
+                    currentUrl = if (location.startsWith("http://", ignoreCase = true) || location.startsWith("https://", ignoreCase = true)) {
+                        location
+                    } else {
+                        val baseUri = Uri.parse(currentUrl)
+                        "${baseUri.scheme}://${baseUri.host}${if (baseUri.port != -1) ":${baseUri.port}" else ""}$location"
+                    }
+                    redirectCount++
+                    continue
+                }
+            }
+            response = res
+            break
+        }
+
+        val it = response ?: throw Exception("Demasiados redireccionamientos de red.")
+        it.use {
+            if (!it.isSuccessful) {
+                throw Exception("HTTP ${it.code}: ${it.message.ifBlank { "Error al descargar la lista" }}")
+            }
+            val body = it.body ?: throw Exception("Respuesta vacía del servidor")
+            val contentLength = body.contentLength()
+            if (contentLength > MAX_PLAYLIST_BYTES) {
+                throw Exception("La lista es demasiado grande (máximo ${MAX_PLAYLIST_BYTES / (1024 * 1024)} MB).")
+            }
+
+            val parsed = body.byteStream().use { stream -> M3uParser.parse(stream) }
+            if (parsed.channels.isNotEmpty() && parsed.channels.all { ch -> ch.name == "Unknown Channel" }) {
+                throw Exception("La URL no devuelve una lista M3U válida. Puede estar bloqueada por tu red o proveedor.")
+            }
+            parsed
         }
     }
 
@@ -572,33 +633,7 @@ class EditorViewModel : ViewModel() {
         }
     }
 
-    private suspend fun fetchAndParseM3u(urlStr: String): ParsedM3u = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(urlStr)
-            .build()
 
-        executeWithFallback(request).use {
-            if (!it.isSuccessful) {
-                throw Exception("HTTP ${it.code}: ${it.message.ifBlank { "Error al descargar la lista" }}")
-            }
-            val contentType = it.header("Content-Type") ?: ""
-            if (contentType.contains("html", ignoreCase = true)) {
-                throw Exception("El servidor devolvió una página web, no una lista M3U. La lista puede estar bloqueada por tu red o proveedor.")
-            }
-            val body = it.body ?: throw Exception("Respuesta vacía del servidor")
-            val contentLength = body.contentLength()
-            if (contentLength > MAX_PLAYLIST_BYTES) {
-                throw Exception("La lista es demasiado grande (máximo ${MAX_PLAYLIST_BYTES / (1024 * 1024)} MB).")
-            }
-            val parsed = body.byteStream().use { stream -> M3uParser.parse(stream) }
-            // A non-M3U response (e.g. an ISP block page) becomes a bunch of
-            // "Unknown Channel" rows — treat that as an invalid list.
-            if (parsed.channels.isNotEmpty() && parsed.channels.all { it.name == "Unknown Channel" }) {
-                throw Exception("La URL no devuelve una lista M3U válida. Puede estar bloqueada por tu red o proveedor.")
-            }
-            parsed
-        }
-    }
 
     fun saveExportFile(
         context: Context,
