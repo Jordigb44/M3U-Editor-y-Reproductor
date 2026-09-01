@@ -157,6 +157,7 @@ class EditorViewModel : ViewModel() {
                         }
                     }
                 }
+                channelProgramsCache.clear()
                 if (aggregated.isNotEmpty()) {
                     _epgByChannel.value = aggregated
                 }
@@ -166,15 +167,20 @@ class EditorViewModel : ViewModel() {
         }
     }
 
+    private val channelProgramsCache = java.util.concurrent.ConcurrentHashMap<String, List<EpgProgram>>()
+
     fun getNowAndNext(channel: Channel, nowMs: Long = System.currentTimeMillis()): Pair<EpgProgram?, EpgProgram?> {
         val epgMap = _epgByChannel.value
         if (epgMap.isEmpty()) return null to null
-        val programs = XmltvParser.findProgramsForChannel(
-            epgMap,
-            channel.attributes["tvg-id"],
-            channel.attributes["tvg-name"],
-            channel.name
-        ) ?: epgMap[channel.id] ?: return null to null
+        val programs = channelProgramsCache.computeIfAbsent(channel.id) {
+            XmltvParser.findProgramsForChannel(
+                epgMap,
+                channel.attributes["tvg-id"],
+                channel.attributes["tvg-name"],
+                channel.name
+            ) ?: epgMap[channel.id] ?: emptyList()
+        }
+        if (programs.isEmpty()) return null to null
         return XmltvParser.nowAndNext(programs, nowMs)
     }
 

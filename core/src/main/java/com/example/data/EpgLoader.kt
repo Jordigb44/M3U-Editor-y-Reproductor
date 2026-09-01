@@ -101,7 +101,9 @@ object EpgLoader {
 
             body.byteStream().use { rawStream ->
                 val decodedStream = wrapStream(rawStream, url)
-                XmltvParser.parse(decodedStream, wantedChannelIds).groupBy { it.channelId }
+                XmltvParser.parse(decodedStream, wantedChannelIds)
+                    .groupBy { it.channelId }
+                    .mapValues { (_, list) -> list.sortedBy { it.startMs } }
             }
         } catch (_: Exception) {
             null

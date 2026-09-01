@@ -52,6 +52,8 @@ object M3uParser {
         ParsedM3u(header = header, channels = channels)
     }
 
+    private val ATTR_REGEX = Regex("""([a-zA-Z0-9_\-]+)=(?:"([^"]*)"|'([^']*)'|([^\s,]+))""")
+
     private fun parseExtInf(extInf: String, url: String): Channel {
         var duration = "-1"
         var name = "Unknown Channel"
@@ -78,8 +80,7 @@ object M3uParser {
                 duration = beforeComma.substring(8, spaceIndex).trim()
                 val attrsStr = beforeComma.substring(spaceIndex).trim()
 
-                val regex = Regex("""([a-zA-Z0-9_\-]+)=(?:"([^"]*)"|'([^']*)'|([^\s,]+))""")
-                val matches = regex.findAll(attrsStr)
+                val matches = ATTR_REGEX.findAll(attrsStr)
                 for (match in matches) {
                     val key = match.groupValues[1]
                     val value = (match.groupValues[2].ifBlank { null }

@@ -38,11 +38,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Configure resilient Coil ImageLoader with SVG support and permissive SSL for IPTV logos
+        // Configure resilient Coil ImageLoader with SVG support, Disk Cache, and permissive SSL for IPTV logos
         val imageLoader = ImageLoader.Builder(this)
             .components {
                 add(SvgDecoder.Factory())
             }
+            .memoryCache {
+                coil.memory.MemoryCache.Builder(this)
+                    .maxSizePercent(0.15)
+                    .build()
+            }
+            .diskCache {
+                coil.disk.DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(50L * 1024 * 1024)
+                    .build()
+            }
+            .respectCacheHeaders(false)
             .okHttpClient {
                 try {
                     val trustAll = arrayOf<TrustManager>(object : X509TrustManager {

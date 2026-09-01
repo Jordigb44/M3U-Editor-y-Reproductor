@@ -227,6 +227,10 @@ fun PlayerScreen(
     val channel: Channel = channels[currentIndex]
 
     fun buildPlayer(): ExoPlayer {
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+
         val loadControl = AdaptiveLoadControl()
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(PLAYER_USER_AGENT)
@@ -238,9 +242,10 @@ fun PlayerScreen(
             .setDataSourceFactory(httpDataSourceFactory)
             .setLoadErrorHandlingPolicy(FastReconnectErrorPolicy(maxRetries))
 
-        return ExoPlayer.Builder(context)
+        return ExoPlayer.Builder(context, renderersFactory)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setVideoScalingMode(androidx.media3.common.C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
             .build()
     }
 

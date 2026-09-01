@@ -178,12 +178,12 @@ fun PlayerScreen(
     val channel: Channel = channels[currentIndex]
 
     fun buildPlayer(): ExoPlayer {
-        // Dynamic buffer: grows after every rebuffer to ride out network jitter and
-        // avoid micro-freezes on unstable IPTV streams.
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+
         val loadControl = AdaptiveLoadControl()
 
-        // Browser User-Agent + cross-protocol redirects (https->http) are required by many
-        // IPTV servers/CDNs; without them valid channels show a black screen.
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(PLAYER_USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
@@ -194,9 +194,10 @@ fun PlayerScreen(
             .setDataSourceFactory(httpDataSourceFactory)
             .setLoadErrorHandlingPolicy(FastReconnectErrorPolicy(maxRetries))
 
-        return ExoPlayer.Builder(context)
+        return ExoPlayer.Builder(context, renderersFactory)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setVideoScalingMode(androidx.media3.common.C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
             .build()
     }
 

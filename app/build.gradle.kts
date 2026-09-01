@@ -13,8 +13,8 @@ android {
     applicationId = "com.jordiguixbetancor.m3ueditor"
     minSdk = 24
     targetSdk = 36
-    versionCode = 25
-    versionName = "1.4.8"
+    versionCode = 26
+    versionName = "1.4.9"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -38,7 +38,8 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }

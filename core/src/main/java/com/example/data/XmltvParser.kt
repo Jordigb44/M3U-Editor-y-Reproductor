@@ -69,14 +69,20 @@ object XmltvParser {
         return programs
     }
 
+    private val RE_BRACKETS = Regex("""^\[[^]]*\]\s*""")
+    private val RE_COUNTRY_COLON = Regex("""^[a-zA-Z]{2,3}\s*:\s*""")
+    private val RE_COUNTRY_PIPE = Regex("""^[a-zA-Z]{2,3}\s*\|\s*""")
+    private val RE_QUALITIES = Regex("""\b(fhd|uhd|4k|hd|sd|hevc|h265|1080p|720p)\b""", RegexOption.IGNORE_CASE)
+    private val RE_NON_ALPHANUM = Regex("""[^a-zA-Z0-9]""")
+
     private fun normalize(str: String?): String {
         if (str.isNullOrBlank()) return ""
         return str.lowercase()
-            .replace(Regex("""^\[[^]]*\]\s*"""), "")
-            .replace(Regex("""^[a-zA-Z]{2,3}\s*:\s*"""), "")
-            .replace(Regex("""^[a-zA-Z]{2,3}\s*\|\s*"""), "")
-            .replace(Regex("""\b(fhd|uhd|4k|hd|sd|hevc|h265|1080p|720p)\b""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""[^a-zA-Z0-9]"""), "")
+            .replace(RE_BRACKETS, "")
+            .replace(RE_COUNTRY_COLON, "")
+            .replace(RE_COUNTRY_PIPE, "")
+            .replace(RE_QUALITIES, "")
+            .replace(RE_NON_ALPHANUM, "")
             .trim()
     }
 
@@ -90,12 +96,12 @@ object XmltvParser {
         val candidates = listOfNotNull(tvgId, tvgName, channelName).map { it.trim() }.filter { it.isNotBlank() }
         if (candidates.isEmpty()) return null
 
-        // 1. Direct exact match
+        // 1. Direct exact match (O(1))
         for (cand in candidates) {
             epgByChannel[cand]?.let { return it }
         }
 
-        // 2. Case-insensitive match
+        // 2. Case-insensitive match (Direct or scan)
         for (cand in candidates) {
             val lower = cand.lowercase()
             for ((key, list) in epgByChannel) {
@@ -159,9 +165,8 @@ object XmltvParser {
 
     /** For a single channel's programmes: (currently playing, next programme). */
     fun nowAndNext(programs: List<EpgProgram>, nowMs: Long): Pair<EpgProgram?, EpgProgram?> {
-        val sorted = programs.sortedBy { it.startMs }
-        val now = sorted.firstOrNull { it.startMs <= nowMs && nowMs < it.stopMs }
-        val next = sorted.firstOrNull { it.startMs >= nowMs }
+        val now = programs.firstOrNull { it.startMs <= nowMs && nowMs < it.stopMs }
+        val next = programs.firstOrNull { it.startMs >= nowMs }
         return now to next
     }
 }
