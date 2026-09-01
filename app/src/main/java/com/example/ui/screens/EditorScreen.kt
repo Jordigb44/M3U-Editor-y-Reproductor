@@ -262,9 +262,11 @@ fun EditorScreen(
 
         val session = playerSession
         if (session != null && session.channels.isNotEmpty()) {
+            val targetCh = session.channels.getOrNull(session.index)
+            val fullIndex = state.channels.indexOfFirst { it.id == targetCh?.id }.coerceAtLeast(0)
             PlayerScreen(
-                channels = session.channels,
-                startIndex = session.index.coerceIn(0, session.channels.lastIndex),
+                channels = state.channels,
+                startIndex = fullIndex,
                 epgUrl = viewModel.activeEpgUrl(),
                 onChannelChanged = { ch ->
                     viewModel.saveLastPlayedChannel(context, ch.id, ch.groupTitle)

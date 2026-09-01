@@ -121,9 +121,16 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    var showChannelList by remember { mutableStateOf(false) }
 
-    // Back always closes the player and returns to the editor, regardless of focus.
-    BackHandler(onBack = onBack)
+    // Back closes drawer first if open, or closes the player and returns to the editor.
+    BackHandler {
+        if (showChannelList) {
+            showChannelList = false
+        } else {
+            onBack()
+        }
+    }
 
     // Prevent screen dimming or sleep mode during video playback.
     DisposableEffect(Unit) {
@@ -158,7 +165,6 @@ fun PlayerScreen(
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
     var seekFeedback by remember { mutableStateOf<String?>(null) }
     var channelBanner by remember { mutableStateOf<String?>(null) }
-    var showChannelList by remember { mutableStateOf(false) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
     // Manually selected control in the bottom bar (0 rewind, 1 play, 2 forward,
@@ -236,8 +242,12 @@ fun PlayerScreen(
     /** (now playing, next) for a channel, from the loaded EPG, or null if unavailable. */
     fun epgNowNextFor(ch: Channel): Pair<EpgProgram?, EpgProgram?>? {
         val map = epgByChannel ?: return null
-        val id = ch.attributes["tvg-id"] ?: return null
-        val list = map[id] ?: return null
+        val list = XmltvParser.findProgramsForChannel(
+            map,
+            ch.attributes["tvg-id"],
+            ch.attributes["tvg-name"],
+            ch.name
+        ) ?: map[ch.id] ?: return null
         if (list.isEmpty()) return null
         return XmltvParser.nowAndNext(list, System.currentTimeMillis())
     }
@@ -315,8 +325,10 @@ fun PlayerScreen(
     LaunchedEffect(epgUrl) {
         if (epgUrl.isNullOrBlank()) return@LaunchedEffect
         epgLoading = true
-        val wanted = channels.mapNotNull { it.attributes["tvg-id"] }
-            .filter { it.isNotBlank() }.toSet()
+        val wanted = (channels.mapNotNull { it.attributes["tvg-id"] } +
+            channels.mapNotNull { it.attributes["tvg-name"] } +
+            channels.map { it.name } +
+            channels.map { it.id }).filter { it.isNotBlank() }.toSet()
         if (wanted.isNotEmpty()) {
             epgByChannel = EpgLoader.load(epgUrl, wanted)
         }
@@ -403,33 +415,28 @@ fun PlayerScreen(
                 }
 
                 when (keyEvent.key) {
-                    // With the control bar visible, left/right move the selection ring
-                    // between all buttons; hidden, they seek.
-                    Key.DirectionLeft -> {
+                    Key.DirectionLeft, Key.DirectionRight -> {
                         if (showControls) {
-                            selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
+                            if (keyEvent.key == Key.DirectionLeft) {
+                                selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
+                            } else {
+                                selectedControl = (selectedControl + 1) % CONTROL_COUNT
+                            }
                         } else {
-                            showControls = true
-                            seekRelative(-SEEK_STEP_MS)
+                            showChannelList = true
                         }
                         true
                     }
-                    Key.DirectionRight -> {
-                        if (showControls) {
-                            selectedControl = (selectedControl + 1) % CONTROL_COUNT
-                        } else {
-                            showControls = true
-                            seekRelative(SEEK_STEP_MS)
-                        }
-                        true
-                    }
-                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
+                    Key.DirectionCenter, Key.Enter -> {
                         if (showControls) {
                             activateControl(selectedControl)
                         } else {
-                            showControls = true
-                            togglePlay()
+                            showChannelList = true
                         }
+                        true
+                    }
+                    Key.MediaPlayPause -> {
+                        togglePlay()
                         true
                     }
                     Key.MediaPlay -> {

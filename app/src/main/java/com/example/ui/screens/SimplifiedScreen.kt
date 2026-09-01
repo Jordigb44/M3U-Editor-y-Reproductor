@@ -169,9 +169,11 @@ fun SimplifiedScreen(
 
     if (playerSession != null) {
         val session = playerSession!!
+        val channelTarget = session.channels.getOrNull(session.index)
+        val fullListIndex = state.channels.indexOfFirst { it.id == channelTarget?.id }.coerceAtLeast(0)
         PlayerScreen(
-            channels = session.channels,
-            startIndex = session.index,
+            channels = state.channels,
+            startIndex = fullListIndex,
             epgUrl = viewModel.activeEpgUrl(),
             simplifiedMode = true,
             onChannelChanged = { ch ->

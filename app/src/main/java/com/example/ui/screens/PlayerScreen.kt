@@ -168,9 +168,16 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val isTvMode = LocalIsTvMode.current
+    var showChannelList by remember { mutableStateOf(false) }
 
-    // Back always closes the player and returns to the editor
-    BackHandler(onBack = onBack)
+    // Intercept back button: close drawer first, or exit player if drawer is not open
+    BackHandler {
+        if (showChannelList) {
+            showChannelList = false
+        } else {
+            onBack()
+        }
+    }
 
     // Prevent screen dimming or sleep mode during video playback
     DisposableEffect(Unit) {
@@ -205,7 +212,6 @@ fun PlayerScreen(
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
     var seekFeedback by remember { mutableStateOf<String?>(null) }
     var channelBanner by remember { mutableStateOf<String?>(null) }
-    var showChannelList by remember { mutableStateOf(false) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
     var selectedControl by remember { mutableIntStateOf(1) }
@@ -272,8 +278,12 @@ fun PlayerScreen(
 
     fun epgNowNextFor(ch: Channel): Pair<EpgProgram?, EpgProgram?>? {
         val map = epgByChannel ?: return null
-        val id = ch.attributes["tvg-id"] ?: return null
-        val list = map[id] ?: return null
+        val list = XmltvParser.findProgramsForChannel(
+            map,
+            ch.attributes["tvg-id"],
+            ch.attributes["tvg-name"],
+            ch.name
+        ) ?: map[ch.id] ?: return null
         if (list.isEmpty()) return null
         return XmltvParser.nowAndNext(list, System.currentTimeMillis())
     }
@@ -357,8 +367,10 @@ fun PlayerScreen(
     LaunchedEffect(epgUrl) {
         if (epgUrl.isNullOrBlank()) return@LaunchedEffect
         epgLoading = true
-        val wanted = channels.mapNotNull { it.attributes["tvg-id"] }
-            .filter { it.isNotBlank() }.toSet()
+        val wanted = (channels.mapNotNull { it.attributes["tvg-id"] } +
+            channels.mapNotNull { it.attributes["tvg-name"] } +
+            channels.map { it.name } +
+            channels.map { it.id }).filter { it.isNotBlank() }.toSet()
         if (wanted.isNotEmpty()) {
             epgByChannel = EpgLoader.load(epgUrl, wanted)
         }
@@ -439,31 +451,29 @@ fun PlayerScreen(
                 }
 
                 when (keyEvent.key) {
-                    Key.DirectionLeft -> {
+                    Key.DirectionLeft, Key.DirectionRight -> {
                         if (showControls) {
-                            selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
+                            if (keyEvent.key == Key.DirectionLeft) {
+                                selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
+                            } else {
+                                selectedControl = (selectedControl + 1) % CONTROL_COUNT
+                            }
                         } else {
-                            showControls = true
-                            seekRelative(-SEEK_STEP_MS)
+                            // User pressed Left or Right while watching video: Open Channel & Group Guide!
+                            showChannelList = true
                         }
                         true
                     }
-                    Key.DirectionRight -> {
-                        if (showControls) {
-                            selectedControl = (selectedControl + 1) % CONTROL_COUNT
-                        } else {
-                            showControls = true
-                            seekRelative(SEEK_STEP_MS)
-                        }
-                        true
-                    }
-                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
+                    Key.DirectionCenter, Key.Enter -> {
                         if (showControls) {
                             activateControl(selectedControl)
                         } else {
-                            showControls = true
-                            togglePlay()
+                            showChannelList = true
                         }
+                        true
+                    }
+                    Key.MediaPlayPause -> {
+                        togglePlay()
                         true
                     }
                     Key.MediaPlay -> {
@@ -897,36 +907,60 @@ fun PlayerScreen(
             }
         }
 
-        // Quick Channel Drawer (Side panel)
+        // Quick Channel & Group Guide Drawer (Overlay panel)
+        val playerGroups = remember(channels) {
+            listOf<String?>(null) + channels.map { it.groupTitle }.filter { it.isNotBlank() }.distinct()
+        }
+        var selectedDrawerGroup by remember(channel.groupTitle) {
+            mutableStateOf<String?>(channel.groupTitle.ifBlank { null })
+        }
+        val drawerChannels = remember(channels, selectedDrawerGroup) {
+            if (selectedDrawerGroup == null) channels
+            else channels.filter { it.groupTitle == selectedDrawerGroup }
+        }
+
         AnimatedVisibility(
             visible = showChannelList,
-            enter = slideInHorizontally(initialOffsetX = { it }),
-            exit = slideOutHorizontally(targetOffsetX = { it }),
-            modifier = Modifier.align(Alignment.CenterEnd)
+            enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.CenterStart)
         ) {
             Surface(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(340.dp),
-                color = Color(0xFF0F172A).copy(alpha = 0.95f),
-                border = BorderStroke(1.dp, TvFocusHighlightColor.copy(alpha = 0.3f))
+                    .widthIn(min = 360.dp, max = 540.dp)
+                    .fillMaxWidth(0.55f),
+                color = Color(0xFF0B0F19).copy(alpha = 0.96f),
+                border = BorderStroke(1.5.dp, TvFocusHighlightColor.copy(alpha = 0.4f))
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp)
+                        .padding(14.dp)
                 ) {
+                    // Header
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = stringResource(R.string.tv_channel_list),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.List,
+                                contentDescription = null,
+                                tint = TvFocusHighlightColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.epg_guide_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         IconButton(onClick = { showChannelList = false }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
@@ -937,49 +971,137 @@ fun PlayerScreen(
                     }
 
                     HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.1f),
+                        color = Color.White.copy(alpha = 0.15f),
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
 
-                    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
-                    LazyColumn(
-                        state = listState,
+                    // 2-Column Split: Groups on Left, Channels on Right
+                    Row(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        itemsIndexed(channels) { index, ch ->
-                            val isCurrent = index == currentIndex
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .tvFocusable(shape = RoundedCornerShape(8.dp)),
-                                color = if (isCurrent) TvFocusHighlightColor.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp),
-                                onClick = {
-                                    currentIndex = index
-                                    showChannelList = false
-                                }
+                        // LEFT: Groups list
+                        Surface(
+                            modifier = Modifier
+                                .width(160.dp)
+                                .fillMaxHeight(),
+                            color = Color.White.copy(alpha = 0.05f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                items(playerGroups) { gName ->
+                                    val isSelected = (gName == selectedDrawerGroup)
+                                    val gLabel = gName ?: stringResource(R.string.simplified_all_channels)
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .tvFocusable(shape = RoundedCornerShape(8.dp)),
+                                        color = if (isSelected) TvFocusHighlightColor.copy(alpha = 0.25f) else Color.Transparent,
+                                        border = if (isSelected) BorderStroke(1.dp, TvFocusHighlightColor) else null,
+                                        shape = RoundedCornerShape(8.dp),
+                                        onClick = { selectedDrawerGroup = gName }
+                                    ) {
+                                        Text(
+                                            text = gLabel,
+                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // RIGHT: Channels list
+                        val drawerListState = rememberLazyListState()
+                        LaunchedEffect(selectedDrawerGroup) {
+                            val activeIdxInGroup = drawerChannels.indexOfFirst { it.id == channel.id }
+                            if (activeIdxInGroup >= 0) {
+                                drawerListState.scrollToItem((activeIdxInGroup - 1).coerceAtLeast(0))
+                            }
+                        }
+
+                        LazyColumn(
+                            state = drawerListState,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            itemsIndexed(drawerChannels, key = { _, ch -> ch.id }) { _, ch ->
+                                val isCurrentChannel = ch.id == channel.id
+                                val (nowProg, _) = epgNowNextFor(ch) ?: (null to null)
+
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .tvFocusable(shape = RoundedCornerShape(10.dp)),
+                                    color = if (isCurrentChannel) TvFocusHighlightColor.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f),
+                                    border = if (isCurrentChannel) BorderStroke(1.5.dp, TvFocusHighlightColor) else null,
+                                    shape = RoundedCornerShape(10.dp),
+                                    onClick = {
+                                        val targetIdx = channels.indexOfFirst { it.id == ch.id }
+                                        if (targetIdx >= 0) {
+                                            currentIndex = targetIdx
+                                            showChannelList = false
+                                        }
+                                    }
                                 ) {
-                                    Text(
-                                        text = "${index + 1}",
-                                        color = if (isCurrent) TvFocusHighlightColor else Color.White.copy(alpha = 0.5f),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.width(36.dp)
-                                    )
-                                    Text(
-                                        text = ch.name,
-                                        color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.85f),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        val globalIdx = channels.indexOfFirst { it.id == ch.id }
+                                        Text(
+                                            text = "${globalIdx + 1}",
+                                            color = if (isCurrentChannel) TvFocusHighlightColor else Color.White.copy(alpha = 0.5f),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.width(30.dp)
+                                        )
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = ch.name,
+                                                color = if (isCurrentChannel) Color.White else Color.White.copy(alpha = 0.9f),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = if (isCurrentChannel) FontWeight.Bold else FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            if (nowProg != null) {
+                                                Text(
+                                                    text = "🔴 ${nowProg.title}",
+                                                    color = TvFocusHighlightColor,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            } else if (selectedDrawerGroup == null && ch.groupTitle.isNotBlank()) {
+                                                Text(
+                                                    text = ch.groupTitle,
+                                                    color = Color.White.copy(alpha = 0.5f),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+
+                                        if (isCurrentChannel) {
+                                            Icon(
+                                                Icons.Filled.PlayArrow,
+                                                contentDescription = null,
+                                                tint = TvFocusHighlightColor,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
