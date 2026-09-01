@@ -31,7 +31,8 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = md_theme_dark_onSurfaceVariant,
     error = md_theme_dark_error,
     onError = md_theme_dark_onError,
-    outline = md_theme_dark_outline
+    outline = md_theme_dark_outline,
+    outlineVariant = md_theme_dark_outlineVariant
 )
 
 private val LightColorScheme = lightColorScheme(

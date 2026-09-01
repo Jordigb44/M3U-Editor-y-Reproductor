@@ -1186,7 +1186,7 @@ fun PlayerScreen(
                                         val globalIdx = channels.indexOfFirst { it.id == ch.id }
                                         Text(
                                             text = "${globalIdx + 1}",
-                                            color = if (isCurrentChannel) TvFocusHighlightColor else Color.White.copy(alpha = 0.5f),
+                                            color = if (isCurrentChannel) TvFocusHighlightColor else Color(0xFF94A3B8),
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.width(26.dp)
@@ -1213,7 +1213,7 @@ fun PlayerScreen(
                                                     Icon(
                                                         imageVector = Icons.Filled.Tv,
                                                         contentDescription = null,
-                                                        tint = Color.White.copy(alpha = 0.5f),
+                                                        tint = Color(0xFF94A3B8),
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                 }
@@ -1223,7 +1223,7 @@ fun PlayerScreen(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = ch.name,
-                                                color = if (isCurrentChannel) Color.White else Color.White.copy(alpha = 0.9f),
+                                                color = if (isCurrentChannel) Color.White else Color(0xFFF8FAFC),
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = if (isCurrentChannel) FontWeight.Bold else FontWeight.Medium,
                                                 maxLines = 1,
@@ -1238,12 +1238,13 @@ fun PlayerScreen(
                                                     Box(
                                                         modifier = Modifier
                                                             .size(6.dp)
-                                                            .background(Color(0xFFE53935), CircleShape)
+                                                            .background(Color(0xFFEF4444), CircleShape)
                                                     )
                                                     Text(
                                                         text = "${nowProg.title} (${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)})",
                                                         color = TvFocusHighlightColor,
                                                         style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.SemiBold,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis
                                                     )
@@ -1251,7 +1252,7 @@ fun PlayerScreen(
                                             } else if (selectedDrawerGroup == null && ch.groupTitle.isNotBlank()) {
                                                 Text(
                                                     text = ch.groupTitle,
-                                                    color = Color.White.copy(alpha = 0.5f),
+                                                    color = Color(0xFF94A3B8),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis

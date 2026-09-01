@@ -14,34 +14,34 @@ import androidx.compose.ui.unit.sp
 // Background is near-black navy; surfaces are gently elevated; the accent family is
 // indigo (primary), cyan/teal (secondary) and emerald (tertiary) for clear hierarchy.
 private val TvDarkColors = darkColorScheme(
-    primary = Color(0xFF6D5EF0),            // indigo - main actions / focus
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF4F46E5),    // selected chips, cards, active states
-    onPrimaryContainer = Color(0xFFFFFFFF),
-    secondary = Color(0xFF22D3EE),           // cyan accent
-    onSecondary = Color(0xFF062A33),
-    secondaryContainer = Color(0xFF155E75),  // teal secondary buttons / external
-    onSecondaryContainer = Color(0xFFCFFAFE),
+    primary = Color(0xFF818CF8),            // electric indigo - main actions / focus
+    onPrimary = Color(0xFF0F172A),
+    primaryContainer = Color(0xFF312E81),    // selected chips, cards, active states
+    onPrimaryContainer = Color(0xFFEEF2FF),
+    secondary = Color(0xFF38BDF8),           // vibrant cyan accent
+    onSecondary = Color(0xFF082F49),
+    secondaryContainer = Color(0xFF0369A1),  // teal secondary buttons / external
+    onSecondaryContainer = Color(0xFFE0F2FE),
     tertiary = Color(0xFF34D399),            // emerald - demo / success
-    onTertiary = Color(0xFF052E1B),
-    tertiaryContainer = Color(0xFF047857),
+    onTertiary = Color(0xFF022C22),
+    tertiaryContainer = Color(0xFF065F46),
     onTertiaryContainer = Color(0xFFD1FAE5),
-    background = Color(0xFF070B14),
-    onBackground = Color(0xFFECF1F9),
-    surface = Color(0xFF0F1626),
-    onSurface = Color(0xFFECF1F9),
-    surfaceVariant = Color(0xFF1A2338),
-    onSurfaceVariant = Color(0xFFA0ACC2),
-    error = Color(0xFFF87171),
+    background = Color(0xFF070A12),
+    onBackground = Color(0xFFF8FAFC),
+    surface = Color(0xFF111827),
+    onSurface = Color(0xFFF8FAFC),
+    surfaceVariant = Color(0xFF1E293B),
+    onSurfaceVariant = Color(0xFFCBD5E1),
+    error = Color(0xFFFCA5A5),
     onError = Color(0xFF450A0A),
     errorContainer = Color(0xFF7F1D1D),
     onErrorContainer = Color(0xFFFECACA),
-    outline = Color(0xFF38435C),
-    outlineVariant = Color(0xFF2A3348),
-    inverseSurface = Color(0xFF1A2338),
-    inverseOnSurface = Color(0xFFECF1F9),
-    inversePrimary = Color(0xFF8B7CF7),
-    surfaceTint = Color(0xFF6D5EF0)
+    outline = Color(0xFF475569),
+    outlineVariant = Color(0xFF2A374D),
+    inverseSurface = Color(0xFF1E293B),
+    inverseOnSurface = Color(0xFFF8FAFC),
+    inversePrimary = Color(0xFF818CF8),
+    surfaceTint = Color(0xFF818CF8)
 )
 
 private val TvLightColors = lightColorScheme(

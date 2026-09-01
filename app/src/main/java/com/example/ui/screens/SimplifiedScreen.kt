@@ -437,8 +437,8 @@ fun SimplifiedScreen(
                                 .weight(if (isWideScreen) 0.22f else 0.34f)
                                 .fillMaxHeight(),
                             shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
                             Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                                 Text(
@@ -483,7 +483,7 @@ fun SimplifiedScreen(
                                                     Icon(
                                                         imageVector = if (groupName == null) Icons.Filled.FolderSpecial else Icons.Filled.Folder,
                                                         contentDescription = null,
-                                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                     Text(
@@ -498,13 +498,13 @@ fun SimplifiedScreen(
                                                 Spacer(Modifier.width(6.dp))
                                                 Surface(
                                                     shape = RoundedCornerShape(6.dp),
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant
                                                 ) {
                                                     Text(
                                                         text = count.toString(),
                                                         style = MaterialTheme.typography.labelSmall,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                     )
                                                 }
@@ -521,8 +521,8 @@ fun SimplifiedScreen(
                                 .weight(if (isWideScreen) 0.44f else 0.66f)
                                 .fillMaxHeight(),
                             shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
                             Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                                 Row(
@@ -544,6 +544,7 @@ fun SimplifiedScreen(
                                     Text(
                                         text = stringResource(R.string.channels_count, activeChannels.size),
                                         style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -570,14 +571,14 @@ fun SimplifiedScreen(
                                                 ),
                                             shape = RoundedCornerShape(14.dp),
                                             color = when {
-                                                isPreviewSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                                                isLastPlayed -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                                                else -> MaterialTheme.colorScheme.surface
+                                                isPreviewSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                                isLastPlayed -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                                else -> MaterialTheme.colorScheme.surfaceVariant
                                             },
                                             border = when {
                                                 isPreviewSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
                                                 isLastPlayed -> BorderStroke(1.5.dp, TvFocusHighlightColor)
-                                                else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                                else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                             }
                                         ) {
                                             Row(
@@ -597,7 +598,7 @@ fun SimplifiedScreen(
                                                 // Channel Logo or Placeholder Badge
                                                 Surface(
                                                     shape = RoundedCornerShape(8.dp),
-                                                    color = if (channel.logoUrl.isNotBlank()) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant,
+                                                    color = MaterialTheme.colorScheme.surface,
                                                     modifier = Modifier.size(38.dp)
                                                 ) {
                                                     if (channel.logoUrl.isNotBlank()) {
@@ -615,7 +616,7 @@ fun SimplifiedScreen(
                                                             Icon(
                                                                 imageVector = Icons.Filled.Tv,
                                                                 contentDescription = null,
-                                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                                 modifier = Modifier.size(20.dp)
                                                             )
                                                         }
@@ -643,12 +644,12 @@ fun SimplifiedScreen(
                                                             Box(
                                                                 modifier = Modifier
                                                                     .size(7.dp)
-                                                                    .background(Color(0xFFE53935), CircleShape)
+                                                                    .background(Color(0xFFEF4444), CircleShape)
                                                             )
                                                             Text(
                                                                 text = "${nowProg.title} (${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)})",
                                                                 style = MaterialTheme.typography.labelSmall,
-                                                                fontWeight = FontWeight.Medium,
+                                                                fontWeight = FontWeight.SemiBold,
                                                                 color = MaterialTheme.colorScheme.primary,
                                                                 maxLines = 1,
                                                                 overflow = TextOverflow.Ellipsis
@@ -689,8 +690,8 @@ fun SimplifiedScreen(
                                     .weight(0.34f)
                                     .fillMaxHeight(),
                                 shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                             ) {
                                 Column(
                                     modifier = Modifier
