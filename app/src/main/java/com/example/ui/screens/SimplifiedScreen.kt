@@ -903,59 +903,6 @@ fun SimplifiedScreen(
                                             }
                                         }
                                     }
-
-                                    // Play Actions (Integrated & External)
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Button(
-                                            onClick = {
-                                                playChannel(previewChannel, previewIndex)
-                                            },
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(48.dp)
-                                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        ) {
-                                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(
-                                                text = stringResource(R.string.play_channel),
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                viewModel.saveLastPlayedChannel(context, previewChannel.id, state.selectedGroup)
-                                                launchExternalPlayer(
-                                                    context = context,
-                                                    channelUrl = previewChannel.url,
-                                                    channelName = previewChannel.name,
-                                                    targetPackage = state.preferredExternalPackage,
-                                                    targetActivity = state.preferredExternalActivity
-                                                )
-                                            },
-                                            modifier = Modifier
-                                                .height(48.dp)
-                                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.AutoMirrored.Filled.OpenInNew,
-                                                contentDescription = stringResource(R.string.open_external_player),
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
