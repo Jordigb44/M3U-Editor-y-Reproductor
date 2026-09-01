@@ -244,6 +244,10 @@ fun EditorScreen(
             PlayerScreen(
                 channels = session.channels,
                 startIndex = session.index.coerceIn(0, session.channels.lastIndex),
+                epgUrl = viewModel.activeEpgUrl(),
+                onChannelChanged = { ch ->
+                    viewModel.saveLastPlayedChannel(context, ch.id, ch.groupTitle)
+                },
                 onBack = { playerSession = null }
             )
         }

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +60,7 @@ fun SimplifiedScreen(
     var playerSession by remember { mutableStateOf<PlayerSession?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
+    var hasAutoPlayedOnStart by rememberSaveable { mutableStateOf(false) }
 
     // Intercept back button: close player if active, or close search
     BackHandler {
@@ -91,6 +93,36 @@ fun SimplifiedScreen(
     val channelListState = rememberLazyListState()
     val groupListState = rememberLazyListState()
 
+    // Automatically resume playback of last channel on start/open
+    LaunchedEffect(state.channels, state.lastPlayedChannelId) {
+        if (!hasAutoPlayedOnStart && state.channels.isNotEmpty()) {
+            val lastId = state.lastPlayedChannelId
+            if (!lastId.isNullOrBlank()) {
+                val targetIndex = activeChannels.indexOfFirst { it.id == lastId }
+                if (targetIndex >= 0) {
+                    hasAutoPlayedOnStart = true
+                    playerSession = PlayerSession(
+                        channels = activeChannels,
+                        index = targetIndex
+                    )
+                } else {
+                    val allIndex = state.channels.indexOfFirst { it.id == lastId }
+                    if (allIndex >= 0) {
+                        hasAutoPlayedOnStart = true
+                        val targetGroup = state.channels[allIndex].groupTitle
+                        viewModel.selectGroup(targetGroup)
+                        val groupChannels = state.channels.filter { it.groupTitle == targetGroup }
+                        val indexInGroup = groupChannels.indexOfFirst { it.id == lastId }.coerceAtLeast(0)
+                        playerSession = PlayerSession(
+                            channels = groupChannels,
+                            index = indexInGroup
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // Restore scroll position to last played channel on first composition or group change
     LaunchedEffect(state.selectedGroup, state.lastPlayedChannelId) {
         val lastId = state.lastPlayedChannelId
@@ -118,6 +150,9 @@ fun SimplifiedScreen(
             startIndex = session.index,
             epgUrl = viewModel.activeEpgUrl(),
             simplifiedMode = true,
+            onChannelChanged = { ch ->
+                viewModel.saveLastPlayedChannel(context, ch.id, ch.groupTitle)
+            },
             onBack = {
                 playerSession = null
             }
