@@ -153,4 +153,16 @@
     <string name="app_version">Version %1$s</string>
     <string name="update_need_unknown_sources">To install the update, allow \'Install unknown apps\' for this app in Settings.</string>
     <string name="update_open_settings">OPEN SETTINGS</string>
+    <!-- Mode Selection Dialog -->
+    <string name="mode_dialog_title">Choose your experience</string>
+    <string name="mode_dialog_subtitle">Select how you prefer to use the application:</string>
+    <string name="mode_simplified_title">📺 Simplified View (Recommended for TV)</string>
+    <string name="mode_simplified_desc">Instant playback of your main playlist. Clean split-screen with groups on the left and channels on the right.</string>
+    <string name="mode_advanced_title">⚙️ Advanced View (Full Editor)</string>
+    <string name="mode_advanced_desc">Manage multiple playlists, organize channels, delete/move groups, and export custom M3U files.</string>
+    <string name="mode_switch_to_advanced">Switch to Advanced Editor</string>
+    <string name="mode_switch_to_simplified">Switch to Simplified View</string>
+    <string name="simplified_no_playlist">No playlist loaded. Load one from Advanced Mode or paste a URL below.</string>
+    <string name="simplified_all_channels">All Channels</string>
+    <string name="channels_in_group">%1$s (%2$d channels)</string>
 </resources>

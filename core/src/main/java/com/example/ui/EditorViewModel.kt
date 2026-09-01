@@ -39,6 +39,12 @@ enum class DefaultPlayerMode {
     ASK
 }
 
+enum class AppViewMode {
+    UNSET,
+    SIMPLIFIED,
+    ADVANCED
+}
+
 data class EditorState(
     val playlists: List<SavedPlaylist> = emptyList(),
     val activePlaylistId: String? = null,
@@ -54,7 +60,10 @@ data class EditorState(
     val defaultPlayerMode: DefaultPlayerMode = DefaultPlayerMode.INTERNAL,
     val preferredExternalPackage: String? = null,
     val preferredExternalActivity: String? = null,
-    val preferredExternalAppName: String? = null
+    val preferredExternalAppName: String? = null,
+    val appViewMode: AppViewMode = AppViewMode.UNSET,
+    val lastPlayedChannelId: String? = null,
+    val lastPlayedGroup: String? = null
 )
 
 class EditorViewModel : ViewModel() {
@@ -78,6 +87,9 @@ class EditorViewModel : ViewModel() {
     private val _preferredExternalPackage = MutableStateFlow<String?>(null)
     private val _preferredExternalActivity = MutableStateFlow<String?>(null)
     private val _preferredExternalAppName = MutableStateFlow<String?>(null)
+    private val _appViewMode = MutableStateFlow(AppViewMode.UNSET)
+    private val _lastPlayedChannelId = MutableStateFlow<String?>(null)
+    private val _lastPlayedGroup = MutableStateFlow<String?>(null)
 
     /** Raw #EXTM3U header of the active playlist, preserved so exports keep playlist-level
      *  attributes (e.g. url-tvg / x-tvg-url). Not part of the UI state. */
@@ -186,7 +198,7 @@ class EditorViewModel : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<EditorState> = combine(
-        _playlists, _activePlaylistId, _channels, _isLoading, _selectedGroup, _searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups, _groups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName
+        _playlists, _activePlaylistId, _channels, _isLoading, _selectedGroup, _searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups, _groups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName, _appViewMode, _lastPlayedChannelId, _lastPlayedGroup
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         val playlists = args[0] as List<SavedPlaylist>
@@ -209,6 +221,9 @@ class EditorViewModel : ViewModel() {
         val extPkg = args[12] as String?
         val extAct = args[13] as String?
         val extName = args[14] as String?
+        val viewMode = args[15] as AppViewMode
+        val lastChannelId = args[16] as String?
+        val lastGroup = args[17] as String?
 
         val activeName = playlists.find { it.id == activeId }?.name ?: ""
 
@@ -227,7 +242,10 @@ class EditorViewModel : ViewModel() {
             defaultPlayerMode = playerMode,
             preferredExternalPackage = extPkg,
             preferredExternalActivity = extAct,
-            preferredExternalAppName = extName
+            preferredExternalAppName = extName,
+            appViewMode = viewMode,
+            lastPlayedChannelId = lastChannelId,
+            lastPlayedGroup = lastGroup
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EditorState())
 
@@ -532,6 +550,18 @@ class EditorViewModel : ViewModel() {
             _preferredExternalPackage.value = prefs.getString("preferred_external_package", "")?.ifBlank { null }
             _preferredExternalActivity.value = prefs.getString("preferred_external_activity", "")?.ifBlank { null }
             _preferredExternalAppName.value = prefs.getString("preferred_external_app_name", "")?.ifBlank { null }
+
+            val savedViewMode = prefs.getString("app_view_mode", AppViewMode.UNSET.name)
+            _appViewMode.value = try { AppViewMode.valueOf(savedViewMode!!) } catch (_: Exception) { AppViewMode.UNSET }
+
+            val lastChannelId = prefs.getString("last_played_channel_id", "")?.ifBlank { null }
+            val lastGroup = prefs.getString("last_played_group", "")?.ifBlank { null }
+            _lastPlayedChannelId.value = lastChannelId
+            _lastPlayedGroup.value = lastGroup
+            if (!lastGroup.isNullOrBlank()) {
+                _selectedGroup.value = lastGroup
+            }
+
             loadCustomGroups(prefs)
 
             // Legacy Single Playlist Migration Check
@@ -557,6 +587,29 @@ class EditorViewModel : ViewModel() {
         return@withContext false
     }
 
+    fun setAppViewMode(context: Context, mode: AppViewMode) {
+        _appViewMode.value = mode
+        val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
+        prefs.edit().putString("app_view_mode", mode.name).apply()
+    }
+
+    fun saveLastPlayedChannel(context: Context, channelId: String, group: String?) {
+        _lastPlayedChannelId.value = channelId
+        _lastPlayedGroup.value = group
+        if (group != null) {
+            _selectedGroup.value = group
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("last_played_channel_id", channelId)
+                    .putString("last_played_group", group ?: "")
+                    .apply()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun switchPlaylist(context: Context, playlistId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             switchPlaylistInternal(context, playlistId)
@@ -571,11 +624,17 @@ class EditorViewModel : ViewModel() {
                 _channels.value = parsedM3u.channels
                 currentHeader = parsedM3u.header
                 _activePlaylistId.value = playlistId
-                _selectedGroup.value = null
+
+                val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
+                val lastGroup = prefs.getString("last_played_group", "")?.ifBlank { null }
+                if (!lastGroup.isNullOrBlank() && parsedM3u.channels.any { it.groupTitle == lastGroup }) {
+                    _selectedGroup.value = lastGroup
+                } else {
+                    _selectedGroup.value = null
+                }
                 _selectedChannelIds.value = emptySet()
                 _selectedGroups.value = emptySet()
 
-                val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
                 prefs.edit().putString("active_playlist_id", playlistId).apply()
             } catch (e: Exception) {
                 _error.value = "No se pudo cargar la lista guardada: ${e.localizedMessage ?: "archivo no válido"}"

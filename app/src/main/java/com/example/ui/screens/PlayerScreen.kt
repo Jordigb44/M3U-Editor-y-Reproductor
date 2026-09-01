@@ -161,7 +161,9 @@ fun PlayerScreen(
     channels: List<Channel>,
     startIndex: Int,
     onBack: () -> Unit,
-    epgUrl: String? = null
+    epgUrl: String? = null,
+    simplifiedMode: Boolean = false,
+    onChannelChanged: ((Channel) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -341,6 +343,15 @@ fun PlayerScreen(
         player.setMediaItem(MediaItem.fromUri(channel.url))
         player.prepare()
         player.playWhenReady = true
+
+        try {
+            val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("last_played_channel_id", channel.id)
+                .putString("last_played_group", channel.groupTitle)
+                .apply()
+        } catch (_: Exception) {}
+        onChannelChanged?.invoke(channel)
     }
 
     LaunchedEffect(epgUrl) {
@@ -793,27 +804,29 @@ fun PlayerScreen(
                         IconButton(
                             onClick = { switchChannel(-1) },
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(if (simplifiedMode) 56.dp else 48.dp)
                                 .tvFocusable(shape = CircleShape)
                         ) {
                             Icon(
                                 Icons.Filled.SkipPrevious,
                                 contentDescription = stringResource(R.string.prev_channel),
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(if (simplifiedMode) 38.dp else 32.dp)
                             )
                         }
 
-                        Spacer(Modifier.width(8.dp))
+                        if (!simplifiedMode) {
+                            Spacer(Modifier.width(8.dp))
 
-                        // Fast Rewind
-                        PlayerControlButton(
-                            icon = Icons.Filled.FastRewind,
-                            isSelected = selectedControl == 0,
-                            onClick = { activateControl(0) }
-                        )
+                            // Fast Rewind
+                            PlayerControlButton(
+                                icon = Icons.Filled.FastRewind,
+                                isSelected = selectedControl == 0,
+                                onClick = { activateControl(0) }
+                            )
+                        }
 
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(if (simplifiedMode) 16.dp else 8.dp))
 
                         // Play / Pause
                         PlayerControlButton(
@@ -823,33 +836,35 @@ fun PlayerScreen(
                             onClick = { activateControl(1) }
                         )
 
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(if (simplifiedMode) 16.dp else 8.dp))
 
-                        // Fast Forward
-                        PlayerControlButton(
-                            icon = Icons.Filled.FastForward,
-                            isSelected = selectedControl == 2,
-                            onClick = { activateControl(2) }
-                        )
+                        if (!simplifiedMode) {
+                            // Fast Forward
+                            PlayerControlButton(
+                                icon = Icons.Filled.FastForward,
+                                isSelected = selectedControl == 2,
+                                onClick = { activateControl(2) }
+                            )
 
-                        Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(8.dp))
+                        }
 
                         // Next Channel
                         IconButton(
                             onClick = { switchChannel(1) },
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(if (simplifiedMode) 56.dp else 48.dp)
                                 .tvFocusable(shape = CircleShape)
                         ) {
                             Icon(
                                 Icons.Filled.SkipNext,
                                 contentDescription = stringResource(R.string.next_channel),
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(if (simplifiedMode) 38.dp else 32.dp)
                             )
                         }
 
-                        Spacer(Modifier.width(16.dp))
+                        Spacer(Modifier.width(if (simplifiedMode) 16.dp else 16.dp))
 
                         // Aspect Ratio Cycle
                         PlayerControlButton(
@@ -858,23 +873,25 @@ fun PlayerScreen(
                             onClick = { activateControl(3) }
                         )
 
-                        Spacer(Modifier.width(8.dp))
+                        if (!simplifiedMode) {
+                            Spacer(Modifier.width(8.dp))
 
-                        // External Player
-                        PlayerControlButton(
-                            icon = Icons.AutoMirrored.Filled.OpenInNew,
-                            isSelected = selectedControl == 4,
-                            onClick = { activateControl(4) }
-                        )
+                            // External Player
+                            PlayerControlButton(
+                                icon = Icons.AutoMirrored.Filled.OpenInNew,
+                                isSelected = selectedControl == 4,
+                                onClick = { activateControl(4) }
+                            )
 
-                        Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(8.dp))
 
-                        // Channel List Drawer
-                        PlayerControlButton(
-                            icon = Icons.AutoMirrored.Filled.List,
-                            isSelected = selectedControl == 5,
-                            onClick = { activateControl(5) }
-                        )
+                            // Channel List Drawer
+                            PlayerControlButton(
+                                icon = Icons.AutoMirrored.Filled.List,
+                                isSelected = selectedControl == 5,
+                                onClick = { activateControl(5) }
+                            )
+                        }
                     }
                 }
             }

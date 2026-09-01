@@ -153,4 +153,16 @@
     <string name="app_version">Versión %1$s</string>
     <string name="update_need_unknown_sources">Para instalar la actualización, permite \'Instalar apps desconocidas\' para esta app en Ajustes.</string>
     <string name="update_open_settings">ABRIR AJUSTES</string>
+    <!-- Mode Selection Dialog -->
+    <string name="mode_dialog_title">Elige tu experiencia</string>
+    <string name="mode_dialog_subtitle">Selecciona cómo prefieres utilizar la aplicación:</string>
+    <string name="mode_simplified_title">📺 Modo Simplificado (Recomendado para TV)</string>
+    <string name="mode_simplified_desc">Reproducción directa de tu lista principal. Vista limpia con grupos a la izquierda y canales a la derecha.</string>
+    <string name="mode_advanced_title">⚙️ Modo Avanzado (Editor Completo)</string>
+    <string name="mode_advanced_desc">Gestiona múltiples listas, edita y organiza canales, elimina grupos y exporta tus listas personalizadas.</string>
+    <string name="mode_switch_to_advanced">Cambiar a Modo Editor Avanzado</string>
+    <string name="mode_switch_to_simplified">Cambiar a Modo Simplificado</string>
+    <string name="simplified_no_playlist">No hay ninguna lista cargada. Cárgala desde el Modo Avanzado o introduce una URL.</string>
+    <string name="simplified_all_channels">Todos los Canales</string>
+    <string name="channels_in_group">%1$s (%2$d canales)</string>
 </resources>

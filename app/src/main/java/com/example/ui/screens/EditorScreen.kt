@@ -15,6 +15,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.jordiguixbetancor.m3ueditor.R
 import com.example.data.Channel
+import com.example.ui.AppViewMode
 import com.example.ui.DefaultPlayerMode
 import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
@@ -166,6 +168,12 @@ fun EditorScreen(
                                     )
                                 }
                             } else {
+                                IconButton(
+                                    onClick = { viewModel.setAppViewMode(context, AppViewMode.SIMPLIFIED) },
+                                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
+                                ) {
+                                    Icon(Icons.Filled.Tv, contentDescription = stringResource(R.string.mode_switch_to_simplified))
+                                }
                                 IconButton(
                                     onClick = { showPlayerSettingsDialog = true },
                                     modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
@@ -325,6 +333,18 @@ fun ChannelsTab(
         }
     }
 
+    val channelListState = rememberLazyListState()
+
+    LaunchedEffect(state.lastPlayedChannelId) {
+        val lastId = state.lastPlayedChannelId
+        if (!lastId.isNullOrBlank() && filteredChannels.isNotEmpty()) {
+            val targetIndex = filteredChannels.indexOfFirst { it.id == lastId }
+            if (targetIndex >= 0) {
+                channelListState.scrollToItem((targetIndex - 1).coerceAtLeast(0))
+            }
+        }
+    }
+
     fun handleChannelClick(channel: Channel) {
         when (state.defaultPlayerMode) {
             DefaultPlayerMode.INTERNAL -> {
@@ -454,6 +474,7 @@ fun ChannelsTab(
         }
 
         LazyColumn(
+            state = channelListState,
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 88.dp, top = 8.dp)
