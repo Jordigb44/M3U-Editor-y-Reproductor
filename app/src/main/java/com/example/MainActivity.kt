@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -8,21 +9,42 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.DeviceMode
 import com.example.ui.EditorViewModel
+import com.example.ui.LocalIsTvMode
+import com.example.ui.PlayerKeyRouter
 import com.example.ui.screens.EditorScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
-  override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    enableEdgeToEdge()
-    setContent {
-      MyApplicationTheme {
-        M3uEditorApp()
-      }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        val isTv = DeviceMode.isTv(this)
+        setContent {
+            CompositionLocalProvider(LocalIsTvMode provides isTv) {
+                MyApplicationTheme {
+                    M3uEditorApp()
+                }
+            }
+        }
     }
-  }
+
+    // Volume-button & remote channel zapping while the player is open: VOLUME_UP = next channel,
+    // VOLUME_DOWN = previous. Consumed only when the player is active (router registered).
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val delta = when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> 1
+            KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> -1
+            else -> null
+        }
+        if (delta != null && PlayerKeyRouter.onZap != null) {
+            PlayerKeyRouter.onZap?.invoke(delta)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
 }
 
 @Composable

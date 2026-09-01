@@ -120,8 +120,27 @@
     <string name="file_picker_load">LOAD</string>
     <string name="prev_channel">Previous channel</string>
     <string name="next_channel">Next channel</string>
+    <!-- TV Multimodal Strings -->
+    <string name="tv_home_subtitle">IPTV Playlist Editor</string>
+    <string name="tv_load_from_file">LOAD FROM FILE</string>
+    <string name="tv_load_demo">DEMO LIST</string>
+    <string name="tv_manage_groups">MANAGE GROUPS</string>
+    <string name="tv_delete_group_confirm">Delete group \"%1$s\" and all its channels?</string>
+    <string name="tv_group_multiselect">MULTI SELECT</string>
+    <string name="tv_group_multiselect_hint">Press OK on each group to select it</string>
+    <string name="tv_groups_selected_count">%1$d groups selected</string>
+    <string name="tv_delete_groups_confirm">Delete %1$d groups and all their channels?</string>
+    <string name="tv_channel_multiselect">MULTI SELECT</string>
+    <string name="tv_channel_multiselect_hint">Press OK on each channel to select it</string>
+    <string name="tv_channels_selected_count">%1$d channels selected</string>
+    <string name="tv_delete_channels_confirm">Delete %1$d selected channels?</string>
+    <string name="tv_live_badge">LIVE</string>
+    <string name="tv_channel_banner">%1$s  ·  %2$d/%3$d</string>
+    <string name="tv_epg_loading">Loading guide…</string>
     <string name="epg_now">Now: %1$s</string>
     <string name="epg_next">Next: %1$s</string>
+    <string name="tv_channel_list">CHANNEL LIST</string>
+    <string name="tv_channel_list_count">CHANNELS (%1$d)</string>
     <string name="channel_list">Channel list</string>
     <string name="update_check">CHECK FOR UPDATES</string>
     <string name="update_available_title">New version %1$s available</string>

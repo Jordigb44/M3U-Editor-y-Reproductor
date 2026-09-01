@@ -11,25 +11,32 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -37,9 +44,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -61,18 +71,28 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.jordiguixbetancor.m3ueditor.R
 import com.example.data.Channel
 import com.example.data.EpgLoader
 import com.example.data.EpgProgram
 import com.example.data.XmltvParser
 import com.example.ui.AdaptiveLoadControl
-import com.example.ui.components.dpadFocusable
+import com.example.ui.LocalIsTvMode
+import com.example.ui.PlayerKeyRouter
+import com.example.ui.components.TvFocusHighlightColor
+import com.example.ui.components.tvFocusable
+import com.example.ui.components.tvRing
+import com.jordiguixbetancor.m3ueditor.R
 import kotlinx.coroutines.delay
+import java.util.Locale
 
-/** Browser-like User-Agent so IPTV servers/CDNs accept the stream requests. */
+/** Browser-like User-Agent so IPTV servers/CDNs accept stream requests. */
 private const val PLAYER_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+private const val SEEK_STEP_MS = 10_000L
+private const val CONTROLS_TIMEOUT_MS = 4_000L
+private const val CHANNEL_BANNER_TIMEOUT_MS = 2_500L
+private const val CONTROL_COUNT = 6
 
 @OptIn(UnstableApi::class)
 class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErrorHandlingPolicy() {
@@ -82,6 +102,56 @@ class FastReconnectErrorPolicy(private val maxRetries: Int = 5) : DefaultLoadErr
 
     override fun getMinimumLoadableRetryCount(dataType: Int): Int {
         return maxRetries
+    }
+}
+
+private fun formatMs(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s)
+    else String.format(Locale.getDefault(), "%02d:%02d", m, s)
+}
+
+fun launchExternalPlayer(
+    context: Context,
+    url: String = "",
+    title: String = "",
+    channelUrl: String = url,
+    channelName: String = title,
+    targetPackage: String? = null,
+    targetActivity: String? = null
+) {
+    val finalUrl = channelUrl.ifBlank { url }
+    val finalTitle = channelName.ifBlank { title }
+    try {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(finalUrl), "video/*")
+            putExtra("title", finalTitle)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            if (!targetPackage.isNullOrBlank()) {
+                if (!targetActivity.isNullOrBlank()) {
+                    setClassName(targetPackage, targetActivity)
+                } else {
+                    setPackage(targetPackage)
+                }
+            }
+        }
+        if (!targetPackage.isNullOrBlank()) {
+            context.startActivity(intent)
+        } else {
+            val chooser = Intent.createChooser(intent, context.getString(R.string.play_channel_with)).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(chooser)
+        }
+    } catch (e: Exception) {
+        Toast.makeText(
+            context,
+            context.getString(R.string.external_player_error, e.localizedMessage ?: ""),
+            Toast.LENGTH_SHORT
+        ).show()
     }
 }
 
@@ -95,8 +165,9 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val isTvMode = LocalIsTvMode.current
 
-    // Back always closes the player and returns to the editor, regardless of focus.
+    // Back always closes the player and returns to the editor
     BackHandler(onBack = onBack)
 
     // Prevent screen dimming or sleep mode during video playback
@@ -125,60 +196,25 @@ fun PlayerScreen(
     var connectionFailed by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
-    
+    var isPlaying by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
+    var seekFeedback by remember { mutableStateOf<String?>(null) }
+    var channelBanner by remember { mutableStateOf<String?>(null) }
     var showChannelList by remember { mutableStateOf(false) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
+    var selectedControl by remember { mutableIntStateOf(1) }
 
     var currentIndex by remember(startIndex) {
         mutableIntStateOf(startIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0)))
     }
-    // Recomputed on every recomposition (currentIndex is State), so it follows zapping.
     val channel: Channel = channels[currentIndex]
 
-    /** (now playing, next) for a channel, from the loaded EPG, or null if unavailable. */
-    fun epgNowNextFor(ch: Channel): Pair<EpgProgram?, EpgProgram?>? {
-        val map = epgByChannel ?: return null
-        val id = ch.attributes["tvg-id"] ?: return null
-        val list = map[id] ?: return null
-        if (list.isEmpty()) return null
-        return XmltvParser.nowAndNext(list, System.currentTimeMillis())
-    }
-
-    // Load the EPG guide once per player session (only for channels in this list).
-    LaunchedEffect(epgUrl) {
-        if (epgUrl.isNullOrBlank()) return@LaunchedEffect
-        epgLoading = true
-        val wanted = channels.mapNotNull { it.attributes["tvg-id"] }
-            .filter { it.isNotBlank() }.toSet()
-        if (wanted.isNotEmpty()) {
-            epgByChannel = EpgLoader.load(epgUrl, wanted)
-        }
-        epgLoading = false
-    }
-
-    LaunchedEffect(showControls) {
-        if (showControls) {
-            delay(3500)
-            showControls = false
-        }
-    }
-
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
-
     fun buildPlayer(): ExoPlayer {
-        // Dynamic buffer: grows after every rebuffer to ride out network jitter and
-        // avoid micro-freezes on unstable IPTV streams.
         val loadControl = AdaptiveLoadControl()
-
-        // Browser User-Agent + cross-protocol redirects (https->http) are required by many
-        // IPTV servers/CDNs; without them valid channels show a black screen.
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(PLAYER_USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
@@ -197,6 +233,59 @@ fun PlayerScreen(
 
     val player = remember { buildPlayer() }
 
+    fun seekRelative(deltaMs: Long) {
+        val target = (player.currentPosition + deltaMs).coerceAtLeast(0L)
+        player.seekTo(target)
+        seekFeedback = (if (deltaMs > 0) "+" else "−") + (deltaMs / 1000) + "s"
+    }
+
+    fun togglePlay() {
+        if (player.isPlaying) player.pause() else player.play()
+    }
+
+    fun cycleResizeMode() {
+        resizeMode = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+        }
+    }
+
+    fun activateControl(index: Int) {
+        when (index) {
+            0 -> seekRelative(-SEEK_STEP_MS)
+            1 -> togglePlay()
+            2 -> seekRelative(SEEK_STEP_MS)
+            3 -> cycleResizeMode()
+            4 -> launchExternalPlayer(context, channel.url, channel.name)
+            5 -> showChannelList = true
+        }
+    }
+
+    fun switchChannel(delta: Int) {
+        if (channels.size <= 1) return
+        currentIndex = (currentIndex + delta + channels.size) % channels.size
+        showControls = true
+    }
+
+    fun epgNowNextFor(ch: Channel): Pair<EpgProgram?, EpgProgram?>? {
+        val map = epgByChannel ?: return null
+        val id = ch.attributes["tvg-id"] ?: return null
+        val list = map[id] ?: return null
+        if (list.isEmpty()) return null
+        return XmltvParser.nowAndNext(list, System.currentTimeMillis())
+    }
+
+    fun buildChannelBanner(): String {
+        val ch = channels[currentIndex]
+        val base = context.getString(R.string.tv_channel_banner, ch.name, currentIndex + 1, channels.size)
+        val epg = epgNowNextFor(ch)
+        if (epg == null) return base
+        val now = epg.first?.title?.let { context.getString(R.string.epg_now, it) }
+        val next = epg.second?.title?.let { context.getString(R.string.epg_next, it) }
+        return listOfNotNull(base, now, next).joinToString("\n")
+    }
+
     fun triggerReconnect() {
         connectionFailed = false
         isReconnecting = true
@@ -205,14 +294,6 @@ fun PlayerScreen(
         player.playWhenReady = true
     }
 
-    /** Zapping: switch to the next/previous channel in the list. */
-    fun switchChannel(delta: Int) {
-        if (channels.size <= 1) return
-        currentIndex = (currentIndex + delta + channels.size) % channels.size
-        showControls = true
-    }
-
-    // One-time player listener (reads the current channel dynamically on errors).
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
@@ -238,6 +319,10 @@ fun PlayerScreen(
                     lastError = null
                 }
             }
+
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
         }
 
         player.addListener(listener)
@@ -247,21 +332,37 @@ fun PlayerScreen(
         }
     }
 
-    // Load / switch the active channel.
     LaunchedEffect(currentIndex) {
         retryCount = 0
         isReconnecting = false
         connectionFailed = false
         lastError = null
+        channelBanner = buildChannelBanner()
         player.setMediaItem(MediaItem.fromUri(channel.url))
         player.prepare()
         player.playWhenReady = true
     }
 
+    LaunchedEffect(epgUrl) {
+        if (epgUrl.isNullOrBlank()) return@LaunchedEffect
+        epgLoading = true
+        val wanted = channels.mapNotNull { it.attributes["tvg-id"] }
+            .filter { it.isNotBlank() }.toSet()
+        if (wanted.isNotEmpty()) {
+            epgByChannel = EpgLoader.load(epgUrl, wanted)
+        }
+        epgLoading = false
+    }
+
+    DisposableEffect(Unit) {
+        PlayerKeyRouter.onZap = { switchChannel(it) }
+        onDispose { PlayerKeyRouter.onZap = null }
+    }
+
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE || 
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE ||
                 event == androidx.lifecycle.Lifecycle.Event.ON_STOP
             ) {
                 player.pause()
@@ -273,6 +374,40 @@ fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(showControls) {
+        if (showControls) {
+            delay(CONTROLS_TIMEOUT_MS)
+            showControls = false
+        }
+    }
+
+    LaunchedEffect(showControls) {
+        while (showControls) {
+            positionMs = player.currentPosition.coerceAtLeast(0L)
+            durationMs = player.duration.takeIf { it > 0 } ?: 0L
+            delay(500)
+        }
+    }
+
+    LaunchedEffect(seekFeedback) {
+        if (seekFeedback != null) {
+            delay(900)
+            seekFeedback = null
+        }
+    }
+
+    LaunchedEffect(channelBanner) {
+        if (channelBanner != null) {
+            delay(CHANNEL_BANNER_TIMEOUT_MS)
+            channelBanner = null
+        }
+    }
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -280,44 +415,68 @@ fun PlayerScreen(
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyDown) {
-                    showControls = true
-                    when (keyEvent.key) {
-                        Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-                            if (player.isPlaying) player.pause() else player.play()
-                            true
-                        }
-                        Key.MediaPlay -> {
-                            player.play()
-                            true
-                        }
-                        Key.MediaPause -> {
-                            player.pause()
-                            true
-                        }
-                        Key.DirectionLeft -> {
-                            player.seekTo((player.currentPosition - 10000).coerceAtLeast(0))
-                            true
-                        }
-                        Key.DirectionRight -> {
-                            player.seekTo((player.currentPosition + 10000).coerceAtMost(player.duration))
-                            true
-                        }
-                        Key.DirectionUp, Key.PageUp -> {
-                            switchChannel(-1)
-                            true
-                        }
-                        Key.DirectionDown, Key.PageDown -> {
-                            switchChannel(1)
-                            true
-                        }
+                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+
+                if (showChannelList) {
+                    return@onKeyEvent when (keyEvent.key) {
                         Key.Back, Key.Escape -> {
-                            onBack()
+                            showChannelList = false
                             true
                         }
                         else -> false
                     }
-                } else false
+                }
+
+                when (keyEvent.key) {
+                    Key.DirectionLeft -> {
+                        if (showControls) {
+                            selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
+                        } else {
+                            showControls = true
+                            seekRelative(-SEEK_STEP_MS)
+                        }
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        if (showControls) {
+                            selectedControl = (selectedControl + 1) % CONTROL_COUNT
+                        } else {
+                            showControls = true
+                            seekRelative(SEEK_STEP_MS)
+                        }
+                        true
+                    }
+                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
+                        if (showControls) {
+                            activateControl(selectedControl)
+                        } else {
+                            showControls = true
+                            togglePlay()
+                        }
+                        true
+                    }
+                    Key.MediaPlay -> {
+                        player.play()
+                        true
+                    }
+                    Key.MediaPause -> {
+                        player.pause()
+                        true
+                    }
+                    Key.DirectionUp, Key.PageUp, Key.VolumeDown -> {
+                        switchChannel(-1)
+                        true
+                    }
+                    Key.DirectionDown, Key.PageDown, Key.VolumeUp -> {
+                        switchChannel(1)
+                        true
+                    }
+                    Key.Menu -> {
+                        showControls = !showControls
+                        true
+                    }
+                    else -> false
+                }
             }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -330,12 +489,8 @@ fun PlayerScreen(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     this.player = player
-                    this.keepScreenOn = true
-                    useController = true
+                    useController = false
                     this.resizeMode = resizeMode
-                    setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
-                        showControls = (visibility == android.view.View.VISIBLE)
-                    })
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -343,332 +498,508 @@ fun PlayerScreen(
                 }
             },
             update = { playerView ->
-                playerView.keepScreenOn = true
                 playerView.resizeMode = resizeMode
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Top Bar Overlay (Auto-hides with controls)
+        // Buffering / Reconnecting indicator
+        if (playbackState == Player.STATE_BUFFERING || isReconnecting) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, TvFocusHighlightColor.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = TvFocusHighlightColor,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            text = if (isReconnecting) {
+                                stringResource(R.string.reconnecting_count, retryCount)
+                            } else {
+                                stringResource(R.string.buffering)
+                            },
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Connection Failed overlay
+        if (connectionFailed) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = Color(0xFF181016).copy(alpha = 0.92f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f)),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.reconnect_failed),
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (lastError != null) {
+                            Text(
+                                text = lastError ?: "",
+                                color = Color.White.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = { triggerReconnect() },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.tvFocusable()
+                            ) {
+                                Text(stringResource(R.string.retry))
+                            }
+                            OutlinedButton(
+                                onClick = { launchExternalPlayer(context, channel.url, channel.name) },
+                                modifier = Modifier.tvFocusable()
+                            ) {
+                                Text(stringResource(R.string.player_try_external_app))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Seek feedback bubble
+        seekFeedback?.let { msg ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 120.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, TvFocusHighlightColor)
+                ) {
+                    Text(
+                        text = msg,
+                        color = TvFocusHighlightColor,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+                    )
+                }
+            }
+        }
+
+        // Channel banner on zapping
+        channelBanner?.let { bannerText ->
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(tween(200)),
+                exit = fadeOut(tween(300)),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 32.dp, top = 32.dp)
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.5.dp, TvFocusHighlightColor.copy(alpha = 0.8f))
+                ) {
+                    Text(
+                        text = bannerText,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                    )
+                }
+            }
+        }
+
+        // OSD Controls Overlay
         AnimatedVisibility(
             visible = showControls,
-            enter = fadeIn() + slideInVertically(),
-            exit = fadeOut() + slideOutVertically(),
-            modifier = Modifier.align(Alignment.TopStart)
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(200)),
+            modifier = Modifier.fillMaxSize()
         ) {
-            Row(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.85f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.90f)
+                            )
+                        )
+                    )
             ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
+                // Top header: Back + Channel name & group
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = Color.White
-                    )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(
-                    onClick = { switchChannel(-1) },
-                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipPrevious,
-                        contentDescription = stringResource(R.string.prev_channel),
-                        tint = Color.White
-                    )
-                }
-                IconButton(
-                    onClick = { switchChannel(1) },
-                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipNext,
-                        contentDescription = stringResource(R.string.next_channel),
-                        tint = Color.White
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = channel.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = channel.groupTitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                    val nowTitle = remember(epgByChannel, currentIndex) {
-                        epgNowNextFor(channels[currentIndex])?.first?.title
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .tvFocusable(shape = CircleShape)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back),
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
-                    if (nowTitle != null) {
+
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.epg_now, nowTitle),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.tertiary,
+                            text = channel.name,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                    }
-                }
-                
-                IconButton(
-                    onClick = {
-                        resizeMode = when (resizeMode) {
-                            AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                            else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        }
-                    },
-                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.AspectRatio,
-                        contentDescription = stringResource(R.string.player_aspect_ratio),
-                        tint = Color.White
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                IconButton(
-                    onClick = {
-                        launchExternalPlayer(context, channel.url, channel.name)
-                    },
-                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = stringResource(R.string.play_with_external_app),
-                        tint = Color.White
-                    )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(
-                    onClick = { showChannelList = true },
-                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.List,
-                        contentDescription = stringResource(R.string.channel_list),
-                        tint = Color.White
-                    )
-                }
-            }
-        }
-
-        // Overlay status indicators
-        if (isReconnecting) {
-            Surface(
-                modifier = Modifier.align(Alignment.Center),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.Black.copy(alpha = 0.85f),
-                contentColor = Color.White
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        text = stringResource(R.string.reconnecting_count, retryCount),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        } else if (connectionFailed) {
-            Surface(
-                modifier = Modifier.align(Alignment.Center),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.Black.copy(alpha = 0.9f),
-                contentColor = Color.White
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.reconnect_failed),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold
-                    )
-                    val errorDetail = lastError
-                    if (errorDetail != null) {
-                        Text(
-                            text = errorDetail,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f),
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Button(
-                        onClick = {
-                            retryCount = 0
-                            triggerReconnect()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.dpadFocusable()
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.retry))
-                    }
-
-                    Button(
-                        onClick = {
-                            launchExternalPlayer(context, channel.url, channel.name)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        modifier = Modifier.dpadFocusable()
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.player_try_external_app))
-                    }
-                }
-            }
-        } else if (playbackState == Player.STATE_BUFFERING) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.White
-            )
-        }
-    }
-
-    // ---------- Channel list dialog ----------
-    if (showChannelList) {
-        AlertDialog(
-            onDismissRequest = { showChannelList = false },
-            title = {
-                Text(stringResource(R.string.channel_list), fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
-                    LazyColumn(
-                        state = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0)),
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
-                            val isCurrent = index == currentIndex
-                            ListItem(
-                                headlineContent = {
-                                    Text(
-                                        text = ch.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
-                                    )
-                                },
-                                supportingContent = { Text(ch.groupTitle, style = MaterialTheme.typography.labelSmall) },
-                                trailingContent = {
-                                    if (isCurrent) {
-                                        Icon(
-                                            imageVector = Icons.Filled.CheckCircle,
-                                            contentDescription = stringResource(R.string.selected),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                },
-                                colors = ListItemDefaults.colors(
-                                    containerColor = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                                ),
-                                modifier = Modifier.clickable {
-                                    currentIndex = index
-                                    showChannelList = false
-                                    showControls = true
-                                }
+                        if (channel.groupTitle.isNotBlank()) {
+                            Text(
+                                text = channel.groupTitle,
+                                color = TvFocusHighlightColor,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
+
+                    // Channel indicator
+                    Surface(
+                        color = Color.White.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "${currentIndex + 1} / ${channels.size}",
+                            color = Color.White.copy(alpha = 0.9f),
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showChannelList = false }) {
-                    Text(stringResource(R.string.close))
+
+                // Bottom control bar
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 32.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Time progress bar if duration is known (VOD) or Live badge
+                    if (durationMs > 0L) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = formatMs(positionMs),
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            LinearProgressIndicator(
+                                progress = { (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = TvFocusHighlightColor,
+                                trackColor = Color.White.copy(alpha = 0.2f),
+                            )
+                            Text(
+                                text = formatMs(durationMs),
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    } else {
+                        // Live stream indicator + EPG Now
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                color = Color(0xFFE50914),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.tv_live_badge),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            val epg = epgNowNextFor(channel)
+                            if (epg?.first != null) {
+                                Text(
+                                    text = epg.first?.title ?: "",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    // Action buttons bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Previous Channel
+                        IconButton(
+                            onClick = { switchChannel(-1) },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .tvFocusable(shape = CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Filled.SkipPrevious,
+                                contentDescription = stringResource(R.string.prev_channel),
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Fast Rewind
+                        PlayerControlButton(
+                            icon = Icons.Filled.FastRewind,
+                            isSelected = selectedControl == 0,
+                            onClick = { activateControl(0) }
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Play / Pause
+                        PlayerControlButton(
+                            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            isSelected = selectedControl == 1,
+                            isPrimary = true,
+                            onClick = { activateControl(1) }
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Fast Forward
+                        PlayerControlButton(
+                            icon = Icons.Filled.FastForward,
+                            isSelected = selectedControl == 2,
+                            onClick = { activateControl(2) }
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Next Channel
+                        IconButton(
+                            onClick = { switchChannel(1) },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .tvFocusable(shape = CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Filled.SkipNext,
+                                contentDescription = stringResource(R.string.next_channel),
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.width(16.dp))
+
+                        // Aspect Ratio Cycle
+                        PlayerControlButton(
+                            icon = Icons.Filled.AspectRatio,
+                            isSelected = selectedControl == 3,
+                            onClick = { activateControl(3) }
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // External Player
+                        PlayerControlButton(
+                            icon = Icons.AutoMirrored.Filled.OpenInNew,
+                            isSelected = selectedControl == 4,
+                            onClick = { activateControl(4) }
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Channel List Drawer
+                        PlayerControlButton(
+                            icon = Icons.AutoMirrored.Filled.List,
+                            isSelected = selectedControl == 5,
+                            onClick = { activateControl(5) }
+                        )
+                    }
                 }
             }
-        )
+        }
+
+        // Quick Channel Drawer (Side panel)
+        AnimatedVisibility(
+            visible = showChannelList,
+            enter = slideInHorizontally(initialOffsetX = { it }),
+            exit = slideOutHorizontally(targetOffsetX = { it }),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(340.dp),
+                color = Color(0xFF0F172A).copy(alpha = 0.95f),
+                border = BorderStroke(1.dp, TvFocusHighlightColor.copy(alpha = 0.3f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.tv_channel_list),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(onClick = { showChannelList = false }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.close),
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.1f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+
+                    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(channels) { index, ch ->
+                            val isCurrent = index == currentIndex
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .tvFocusable(shape = RoundedCornerShape(8.dp)),
+                                color = if (isCurrent) TvFocusHighlightColor.copy(alpha = 0.2f) else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp),
+                                onClick = {
+                                    currentIndex = index
+                                    showChannelList = false
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        text = "${index + 1}",
+                                        color = if (isCurrent) TvFocusHighlightColor else Color.White.copy(alpha = 0.5f),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.width(36.dp)
+                                    )
+                                    Text(
+                                        text = ch.name,
+                                        color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.85f),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-fun launchExternalPlayer(
-    context: Context,
-    channelUrl: String,
-    channelName: String,
-    targetPackage: String? = null,
-    targetActivity: String? = null
+@Composable
+private fun PlayerControlButton(
+    icon: ImageVector,
+    isSelected: Boolean,
+    isPrimary: Boolean = false,
+    onClick: () -> Unit
 ) {
-    try {
-        val uri = Uri.parse(channelUrl)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "video/*")
-            putExtra("title", channelName)
-            putExtra("displayName", channelName)
-            putExtra("poster", channelName)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = when {
+            isPrimary -> TvFocusHighlightColor
+            isSelected -> Color.White.copy(alpha = 0.3f)
+            else -> Color.White.copy(alpha = 0.12f)
+        },
+        border = tvRing(isSelected, width = 2.5.dp, color = TvFocusHighlightColor),
+        modifier = Modifier
+            .size(if (isPrimary) 56.dp else 44.dp)
+            .tvFocusable(shape = CircleShape)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isPrimary) Color.Black else Color.White,
+                modifier = Modifier.size(if (isPrimary) 30.dp else 22.dp)
+            )
         }
-
-        if (!targetPackage.isNullOrBlank()) {
-            if (!targetActivity.isNullOrBlank()) {
-                intent.setClassName(targetPackage, targetActivity)
-            } else {
-                intent.setPackage(targetPackage)
-            }
-            context.startActivity(intent)
-            return
-        }
-
-        val pm = context.packageManager
-        val resolveInfos = pm.queryIntentActivities(intent, 0)
-        val validApps = resolveInfos.filter {
-            it.activityInfo != null && it.activityInfo.packageName != context.packageName
-        }
-
-        if (validApps.isNotEmpty()) {
-            if (validApps.size == 1) {
-                val app = validApps.first()
-                val explicitIntent = Intent(intent).apply {
-                    setClassName(app.activityInfo.packageName, app.activityInfo.name)
-                }
-                context.startActivity(explicitIntent)
-            } else {
-                val chooserIntent = Intent.createChooser(intent, context.getString(R.string.play_channel_with))
-                chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooserIntent)
-            }
-        } else {
-            val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "*/*")
-                putExtra("title", channelName)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            val chooserIntent = Intent.createChooser(fallbackIntent, context.getString(R.string.play_channel_with))
-            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(chooserIntent)
-        }
-    } catch (e: Exception) {
-        Toast.makeText(
-            context,
-            context.getString(R.string.external_player_error, e.message),
-            Toast.LENGTH_LONG
-        ).show()
     }
 }

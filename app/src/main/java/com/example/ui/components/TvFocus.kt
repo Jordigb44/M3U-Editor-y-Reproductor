@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,3 +39,23 @@ fun Modifier.dpadFocusable(
         .scale(scaleValue)
         .border(width = borderWidth, color = borderColor, shape = shape)
 }
+
+/**
+ * TV Focusable alias for TV components
+ */
+@Composable
+fun Modifier.tvFocusable(
+    shape: Shape = RoundedCornerShape(14.dp),
+    focusBorderWidth: Dp = 3.dp,
+    focusColor: Color = TvFocusHighlightColor,
+    onFocusChange: ((Boolean) -> Unit)? = null
+): Modifier = dpadFocusable(shape, focusBorderWidth, focusColor, onFocusChange)
+
+/**
+ * Returns a high-visibility focus border stroke for active cards / buttons.
+ */
+fun tvRing(
+    isFocused: Boolean,
+    width: Dp = 3.dp,
+    color: Color = TvFocusHighlightColor
+): BorderStroke? = if (isFocused) BorderStroke(width, color) else null

@@ -46,6 +46,7 @@ jobs:
       - name: Prepare release assets
         run: |
           TAG="${GITHUB_REF_NAME}"
+          cp app/build/outputs/apk/release/app-release.apk "M3U-Editor-y-Reproductor-${TAG}-universal.apk"
           cp app/build/outputs/apk/release/app-release.apk "M3U-Editor-y-Reproductor-${TAG}-mobile.apk"
           cp apptv/build/outputs/apk/release/apptv-release.apk "M3U-Editor-y-Reproductor-${TAG}-tv.apk"
           ls -la M3U-Editor-y-Reproductor-*.apk
@@ -54,6 +55,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            M3U-Editor-y-Reproductor-*-universal.apk
             M3U-Editor-y-Reproductor-*-mobile.apk
             M3U-Editor-y-Reproductor-*-tv.apk
           name: M3U Editor y Reproductor ${{ github.ref_name }}
