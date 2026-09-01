@@ -164,7 +164,6 @@ fun PlayerScreen(
     var durationMs by remember { mutableLongStateOf(0L) }
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FILL) }
     var seekFeedback by remember { mutableStateOf<String?>(null) }
-    var channelBanner by remember { mutableStateOf<String?>(null) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
     // Manually selected control in the bottom bar (0 rewind, 1 play, 2 forward,
@@ -253,16 +252,6 @@ fun PlayerScreen(
         return XmltvParser.nowAndNext(list, System.currentTimeMillis())
     }
 
-    fun buildChannelBanner(): String {
-        val ch = channels[currentIndex]
-        val base = context.getString(R.string.tv_channel_banner, ch.name, currentIndex + 1, channels.size)
-        val epg = epgNowNextFor(ch)
-        if (epg == null) return base
-        val now = epg.first?.title?.let { context.getString(R.string.epg_now, it) }
-        val next = epg.second?.title?.let { context.getString(R.string.epg_next, it) }
-        return listOfNotNull(base, now, next).joinToString("\n")
-    }
-
     fun triggerReconnect() {
         connectionFailed = false
         isReconnecting = true
@@ -316,7 +305,7 @@ fun PlayerScreen(
         isReconnecting = false
         connectionFailed = false
         lastError = null
-        channelBanner = buildChannelBanner()
+        showControls = true
         player.setMediaItem(MediaItem.fromUri(channel.url))
         player.prepare()
         player.playWhenReady = true
@@ -379,14 +368,6 @@ fun PlayerScreen(
         if (seekFeedback != null) {
             delay(900)
             seekFeedback = null
-        }
-    }
-
-    // Auto-clear the channel-change banner.
-    LaunchedEffect(channelBanner) {
-        if (channelBanner != null) {
-            delay(CHANNEL_BANNER_TIMEOUT_MS)
-            channelBanner = null
         }
     }
 
@@ -530,28 +511,6 @@ fun PlayerScreen(
             )
         }
 
-        // ---------- Channel-change banner ----------
-        val banner = channelBanner
-        if (banner != null) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 96.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.Black.copy(alpha = 0.8f),
-                contentColor = Color.White
-            ) {
-                Text(
-                    text = banner,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 26.dp, vertical = 12.dp)
-                )
-            }
-        }
-
         // ---------- Controls overlay (auto-hides) ----------
         AnimatedVisibility(
             visible = showControls,
@@ -566,7 +525,7 @@ fun PlayerScreen(
                         .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent)
+                                listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)
                             )
                         )
                 ) {
@@ -587,60 +546,6 @@ fun PlayerScreen(
                                 modifier = Modifier.size(30.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = channel.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (channel.groupTitle.isNotBlank()) {
-                                Text(
-                                    text = channel.groupTitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            val nowTitle = remember(epgByChannel, currentIndex) {
-                                epgNowNextFor(channels[currentIndex])?.first?.title
-                            }
-                            if (nowTitle != null) {
-                                Text(
-                                    text = stringResource(R.string.epg_now, nowTitle),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            } else if (epgLoading) {
-                                Text(
-                                    text = stringResource(R.string.tv_epg_loading),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                        if (durationMs <= 0L) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.error,
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.tv_live_badge),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -652,15 +557,167 @@ fun PlayerScreen(
                         .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.95f))
                             )
                         )
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 28.dp, vertical = 22.dp)
+                            .padding(horizontal = 28.dp, vertical = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // EPG PROGRAM INFO CARD (Positioned right above the progress bar)
+                        val epg = epgNowNextFor(channel)
+                        val nowProg = epg?.first
+                        val nextProg = epg?.second
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFF0F172A).copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Row 1: Channel logo + Channel name + LIVE badge + Category + Channel number
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        if (channel.logoUrl.isNotBlank()) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color.White.copy(alpha = 0.1f),
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                AsyncImage(
+                                                    model = channel.logoUrl,
+                                                    contentDescription = channel.name,
+                                                    contentScale = ContentScale.Fit,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .padding(2.dp)
+                                                )
+                                            }
+                                        }
+                                        Column {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = channel.name,
+                                                    color = Color.White,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Surface(
+                                                    color = Color(0xFFEF4444),
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = if (durationMs > 0L) "VOD" else stringResource(R.string.tv_live_badge),
+                                                        color = Color.White,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Black,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                            if (channel.groupTitle.isNotBlank()) {
+                                                Text(
+                                                    text = channel.groupTitle,
+                                                    color = TvFocusHighlightColor,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Channel number badge
+                                    Surface(
+                                        color = Color.White.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "${currentIndex + 1} / ${channels.size}",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                // Row 2: EPG Current Program & Next Program
+                                if (nowProg != null) {
+                                    val nowStart = formatEpgTime(nowProg.startMs)
+                                    val nowStop = formatEpgTime(nowProg.stopMs)
+                                    val nowTotalMs = (nowProg.stopMs - nowProg.startMs).coerceAtLeast(1L)
+                                    val nowElapsedMs = (System.currentTimeMillis() - nowProg.startMs).coerceIn(0L, nowTotalMs)
+                                    val epgProgress = (nowElapsedMs.toFloat() / nowTotalMs.toFloat()).coerceIn(0f, 1f)
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "🔴 ${nowProg.title}",
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text(
+                                                text = "$nowStart - $nowStop",
+                                                color = Color(0xFFCBD5E1),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+
+                                        // EPG Program progress bar
+                                        LinearProgressIndicator(
+                                            progress = { epgProgress },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(4.dp)
+                                                .clip(RoundedCornerShape(2.dp)),
+                                            color = TvFocusHighlightColor,
+                                            trackColor = Color.White.copy(alpha = 0.15f),
+                                        )
+
+                                        if (nextProg != null) {
+                                            Text(
+                                                text = "⏭️ " + stringResource(R.string.epg_next, nextProg.title) + " (${formatEpgTime(nextProg.startMs)})",
+                                                color = Color(0xFF94A3B8),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         // ---------- Progress + times ----------
                         Row(
                             modifier = Modifier.fillMaxWidth(),
