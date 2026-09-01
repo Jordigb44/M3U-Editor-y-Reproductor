@@ -468,7 +468,7 @@ fun PlayerScreen(
 
                 when (keyEvent.key) {
                     Key.DirectionLeft -> {
-                        if (showControls) {
+                        if (showControls && !simplifiedMode) {
                             selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
                         } else {
                             // Pressing Left while watching video: ONLY Way to Open Channel & Group Drawer!
@@ -478,7 +478,7 @@ fun PlayerScreen(
                         true
                     }
                     Key.DirectionRight -> {
-                        if (showControls) {
+                        if (showControls && !simplifiedMode) {
                             selectedControl = (selectedControl + 1) % CONTROL_COUNT
                         } else {
                             // Pressing Right while watching video: Fast forward 10 seconds (does NOT open drawer)
@@ -488,9 +488,13 @@ fun PlayerScreen(
                     }
                     Key.DirectionCenter, Key.Enter -> {
                         if (showControls) {
-                            activateControl(selectedControl)
+                            if (simplifiedMode) {
+                                showControls = false
+                            } else {
+                                activateControl(selectedControl)
+                            }
                         } else {
-                            // Pressing OK / Enter while watching video: ONLY opens player controls (Play/Pause, timeline, etc.)
+                            // Pressing OK / Enter while watching video: Opens TV guide / player controls
                             showChannelList = false
                             selectedControl = 0
                             showControls = true
@@ -884,8 +888,8 @@ fun PlayerScreen(
                         }
                     }
 
-                    // VOD Time progress bar if duration is known
-                    if (durationMs > 0L) {
+                    // VOD Time progress bar if duration is known (Hidden in simplified mode)
+                    if (!simplifiedMode && durationMs > 0L) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -913,28 +917,28 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Action buttons bar
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Previous Channel
-                        IconButton(
-                            onClick = { switchChannel(-1) },
-                            modifier = Modifier
-                                .size(if (simplifiedMode) 56.dp else 48.dp)
-                                .tvFocusable(shape = CircleShape)
+                    // Action buttons bar (Hidden in simplified mode for pure, clean TV experience)
+                    if (!simplifiedMode) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.Filled.SkipPrevious,
-                                contentDescription = stringResource(R.string.prev_channel),
-                                tint = Color.White,
-                                modifier = Modifier.size(if (simplifiedMode) 38.dp else 32.dp)
-                            )
-                        }
+                            // Previous Channel
+                            IconButton(
+                                onClick = { switchChannel(-1) },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .tvFocusable(shape = CircleShape)
+                            ) {
+                                Icon(
+                                    Icons.Filled.SkipPrevious,
+                                    contentDescription = stringResource(R.string.prev_channel),
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
 
-                        if (!simplifiedMode) {
                             Spacer(Modifier.width(8.dp))
 
                             // Fast Rewind
@@ -943,21 +947,19 @@ fun PlayerScreen(
                                 isSelected = selectedControl == 0,
                                 onClick = { activateControl(0) }
                             )
-                        }
 
-                        Spacer(Modifier.width(if (simplifiedMode) 16.dp else 8.dp))
+                            Spacer(Modifier.width(8.dp))
 
-                        // Play / Pause
-                        PlayerControlButton(
-                            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            isSelected = selectedControl == 1,
-                            isPrimary = true,
-                            onClick = { activateControl(1) }
-                        )
+                            // Play / Pause
+                            PlayerControlButton(
+                                icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                isSelected = selectedControl == 1,
+                                isPrimary = true,
+                                onClick = { activateControl(1) }
+                            )
 
-                        Spacer(Modifier.width(if (simplifiedMode) 16.dp else 8.dp))
+                            Spacer(Modifier.width(8.dp))
 
-                        if (!simplifiedMode) {
                             // Fast Forward
                             PlayerControlButton(
                                 icon = Icons.Filled.FastForward,
@@ -966,33 +968,31 @@ fun PlayerScreen(
                             )
 
                             Spacer(Modifier.width(8.dp))
-                        }
 
-                        // Next Channel
-                        IconButton(
-                            onClick = { switchChannel(1) },
-                            modifier = Modifier
-                                .size(if (simplifiedMode) 56.dp else 48.dp)
-                                .tvFocusable(shape = CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Filled.SkipNext,
-                                contentDescription = stringResource(R.string.next_channel),
-                                tint = Color.White,
-                                modifier = Modifier.size(if (simplifiedMode) 38.dp else 32.dp)
+                            // Next Channel
+                            IconButton(
+                                onClick = { switchChannel(1) },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .tvFocusable(shape = CircleShape)
+                            ) {
+                                Icon(
+                                    Icons.Filled.SkipNext,
+                                    contentDescription = stringResource(R.string.next_channel),
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+
+                            Spacer(Modifier.width(16.dp))
+
+                            // Aspect Ratio Cycle
+                            PlayerControlButton(
+                                icon = Icons.Filled.AspectRatio,
+                                isSelected = selectedControl == 3,
+                                onClick = { activateControl(3) }
                             )
-                        }
 
-                        Spacer(Modifier.width(if (simplifiedMode) 16.dp else 16.dp))
-
-                        // Aspect Ratio Cycle
-                        PlayerControlButton(
-                            icon = Icons.Filled.AspectRatio,
-                            isSelected = selectedControl == 3,
-                            onClick = { activateControl(3) }
-                        )
-
-                        if (!simplifiedMode) {
                             Spacer(Modifier.width(8.dp))
 
                             // External Player
