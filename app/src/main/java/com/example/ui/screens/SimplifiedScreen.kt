@@ -467,23 +467,34 @@ fun SimplifiedScreen(
                                             border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.weight(1f)
-                                                )
-                                                Spacer(Modifier.width(8.dp))
+                                                Row(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (groupName == null) Icons.Filled.FolderSpecial else Icons.Filled.Folder,
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                Spacer(Modifier.width(6.dp))
                                                 Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant
                                                 ) {
                                                     Text(
                                                         text = count.toString(),

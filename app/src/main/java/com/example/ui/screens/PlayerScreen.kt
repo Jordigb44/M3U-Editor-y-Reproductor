@@ -35,6 +35,8 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -967,6 +969,9 @@ fun PlayerScreen(
         val playerGroups = remember(channels) {
             listOf<String?>(null) + channels.map { it.groupTitle }.filter { it.isNotBlank() }.distinct()
         }
+        val groupCounts = remember(channels) {
+            channels.groupingBy { it.groupTitle }.eachCount()
+        }
         var selectedDrawerGroup by remember(channel.groupTitle) {
             mutableStateOf<String?>(channel.groupTitle.ifBlank { null })
         }
@@ -984,16 +989,17 @@ fun PlayerScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(0.48f),
-                color = Color(0xFF0B0F19).copy(alpha = 0.96f),
-                border = BorderStroke(1.5.dp, TvFocusHighlightColor.copy(alpha = 0.4f))
+                    .fillMaxWidth(0.55f),
+                color = Color(0xFF0B0F19).copy(alpha = 0.98f),
+                border = BorderStroke(1.5.dp, TvFocusHighlightColor.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(12.dp)
+                        .padding(14.dp)
                 ) {
-                    // Header
+                    // Header with title and active group breadcrumb
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1001,78 +1007,128 @@ fun PlayerScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.List,
-                                contentDescription = null,
-                                tint = TvFocusHighlightColor,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Text(
-                                text = stringResource(R.string.epg_guide_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Surface(
+                                shape = CircleShape,
+                                color = TvFocusHighlightColor.copy(alpha = 0.15f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.List,
+                                        contentDescription = null,
+                                        tint = TvFocusHighlightColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.epg_guide_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = (selectedDrawerGroup ?: stringResource(R.string.simplified_all_channels)) + " • ${drawerChannels.size} canales",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TvFocusHighlightColor.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                         IconButton(onClick = { showChannelList = false }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.close),
-                                tint = Color.White
+                                tint = Color.White.copy(alpha = 0.8f)
                             )
                         }
                     }
 
                     HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.15f),
-                        modifier = Modifier.padding(vertical = 6.dp)
+                        color = Color.White.copy(alpha = 0.12f),
+                        modifier = Modifier.padding(vertical = 10.dp)
                     )
 
-                    // 2-Column Split: Groups on Left, Channels on Right
+                    // 2-Column Split: Groups on Left (175dp), Channels on Right (Remaining)
                     Row(
                         modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // LEFT: Groups list
                         Surface(
                             modifier = Modifier
-                                .width(135.dp)
+                                .width(175.dp)
                                 .fillMaxHeight(),
-                            color = Color.White.copy(alpha = 0.05f),
-                            shape = RoundedCornerShape(12.dp)
+                            color = Color.White.copy(alpha = 0.04f),
+                            shape = RoundedCornerShape(14.dp)
                         ) {
                             LazyColumn(
-                                modifier = Modifier.fillMaxSize().padding(4.dp),
+                                modifier = Modifier.fillMaxSize().padding(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 items(playerGroups) { gName ->
                                     val isSelected = (gName == selectedDrawerGroup)
+                                    val count = if (gName == null) channels.size else (groupCounts[gName] ?: 0)
                                     val gLabel = gName ?: stringResource(R.string.simplified_all_channels)
+
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .tvFocusable(
-                                                shape = RoundedCornerShape(8.dp),
-                                                onClick = { selectedDrawerGroup = gName },
-                                                onFocusChange = { focused ->
-                                                    if (focused) selectedDrawerGroup = gName
+                                                shape = RoundedCornerShape(10.dp),
+                                                onClick = {
+                                                    selectedDrawerGroup = gName
+                                                    try {
+                                                        drawerFocusRequester.requestFocus()
+                                                    } catch (_: Exception) {}
                                                 }
                                             ),
                                         color = if (isSelected) TvFocusHighlightColor.copy(alpha = 0.25f) else Color.Transparent,
-                                        border = if (isSelected) BorderStroke(1.dp, TvFocusHighlightColor) else null,
-                                        shape = RoundedCornerShape(8.dp)
+                                        border = if (isSelected) BorderStroke(1.5.dp, TvFocusHighlightColor) else null,
+                                        shape = RoundedCornerShape(10.dp)
                                     ) {
-                                        Text(
-                                            text = gLabel,
-                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (gName == null) Icons.Filled.FolderSpecial else Icons.Filled.Folder,
+                                                    contentDescription = null,
+                                                    tint = if (isSelected) TvFocusHighlightColor else Color.White.copy(alpha = 0.6f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = gLabel,
+                                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.8f),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            Spacer(Modifier.width(4.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = if (isSelected) TvFocusHighlightColor.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f)
+                                            ) {
+                                                Text(
+                                                    text = count.toString(),
+                                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1084,6 +1140,8 @@ fun PlayerScreen(
                             val activeIdxInGroup = drawerChannels.indexOfFirst { it.id == channel.id }
                             if (activeIdxInGroup >= 0) {
                                 drawerListState.scrollToItem((activeIdxInGroup - 1).coerceAtLeast(0))
+                            } else {
+                                drawerListState.scrollToItem(0)
                             }
                         }
 
@@ -1111,7 +1169,7 @@ fun PlayerScreen(
                                                 }
                                             }
                                         ),
-                                    color = if (isCurrentChannel) TvFocusHighlightColor.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f),
+                                    color = if (isCurrentChannel) TvFocusHighlightColor.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f),
                                     border = if (isCurrentChannel) BorderStroke(1.5.dp, TvFocusHighlightColor) else null,
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
@@ -1131,9 +1189,9 @@ fun PlayerScreen(
 
                                         // Channel logo or icon
                                         Surface(
-                                            shape = RoundedCornerShape(6.dp),
+                                            shape = RoundedCornerShape(8.dp),
                                             color = Color.White.copy(alpha = 0.08f),
-                                            modifier = Modifier.size(32.dp)
+                                            modifier = Modifier.size(34.dp)
                                         ) {
                                             if (ch.logoUrl.isNotBlank()) {
                                                 AsyncImage(
@@ -1142,7 +1200,7 @@ fun PlayerScreen(
                                                     contentScale = ContentScale.Fit,
                                                     modifier = Modifier
                                                         .fillMaxSize()
-                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .clip(RoundedCornerShape(8.dp))
                                                         .padding(2.dp)
                                                 )
                                             } else {
@@ -1151,7 +1209,7 @@ fun PlayerScreen(
                                                         imageVector = Icons.Filled.Tv,
                                                         contentDescription = null,
                                                         tint = Color.White.copy(alpha = 0.5f),
-                                                        modifier = Modifier.size(16.dp)
+                                                        modifier = Modifier.size(18.dp)
                                                     )
                                                 }
                                             }
@@ -1167,13 +1225,24 @@ fun PlayerScreen(
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                             if (nowProg != null) {
-                                                Text(
-                                                    text = "🔴 ${nowProg.title}",
-                                                    color = TvFocusHighlightColor,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(6.dp)
+                                                            .background(Color(0xFFE53935), CircleShape)
+                                                    )
+                                                    Text(
+                                                        text = "${nowProg.title} (${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)})",
+                                                        color = TvFocusHighlightColor,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
                                             } else if (selectedDrawerGroup == null && ch.groupTitle.isNotBlank()) {
                                                 Text(
                                                     text = ch.groupTitle,
@@ -1233,4 +1302,10 @@ private fun PlayerControlButton(
             )
         }
     }
+}
+
+private fun formatEpgTime(timeMs: Long): String {
+    val date = java.util.Date(timeMs)
+    val format = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+    return format.format(date)
 }
