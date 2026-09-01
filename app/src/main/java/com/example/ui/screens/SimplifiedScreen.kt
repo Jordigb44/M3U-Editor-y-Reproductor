@@ -36,6 +36,8 @@ import com.example.ui.AppViewMode
 import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
 import com.example.ui.PlayerSession
+import com.example.ui.components.AppSettingsDialog
+import com.example.ui.components.ParentalPinDialog
 import com.example.ui.components.TvFocusHighlightColor
 import com.example.ui.components.tvFocusable
 import com.example.ui.components.tvRing
@@ -160,6 +162,28 @@ fun SimplifiedScreen(
         return
     }
 
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
+
+    if (showPinDialog) {
+        ParentalPinDialog(
+            viewModel = viewModel,
+            onSuccess = {
+                showPinDialog = false
+                showSettingsDialog = true
+            },
+            onDismiss = { showPinDialog = false }
+        )
+    }
+
+    if (showSettingsDialog) {
+        AppSettingsDialog(
+            state = state,
+            viewModel = viewModel,
+            onDismiss = { showSettingsDialog = false }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -200,25 +224,44 @@ fun SimplifiedScreen(
                         )
                     }
 
-                    // Switch to Advanced Mode Button
-                    FilledTonalButton(
-                        onClick = onSwitchToAdvanced,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .padding(end = 8.dp)
-                            .tvFocusable(shape = RoundedCornerShape(12.dp))
+                    // Settings Button (Parental Control / Player / Modes)
+                    IconButton(
+                        onClick = {
+                            if (state.parentalControlEnabled && !state.isParentalUnlocked) {
+                                showPinDialog = true
+                            } else {
+                                showSettingsDialog = true
+                            }
+                        },
+                        modifier = Modifier.tvFocusable(shape = CircleShape)
                     ) {
                         Icon(
-                            Icons.Filled.Tune,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.settings)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.editor),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                    }
+
+                    // Switch to Advanced Mode Button (Hidden if mode switch is locked by parental control)
+                    if (!state.parentalControlEnabled || !state.lockModeSwitch) {
+                        FilledTonalButton(
+                            onClick = onSwitchToAdvanced,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .tvFocusable(shape = RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(
+                                Icons.Filled.Tune,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.editor),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

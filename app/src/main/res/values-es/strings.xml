@@ -165,4 +165,18 @@
     <string name="simplified_no_playlist">No hay ninguna lista cargada. Cárgala desde el Modo Avanzado o introduce una URL.</string>
     <string name="simplified_all_channels">Todos los Canales</string>
     <string name="channels_in_group">%1$s (%2$d canales)</string>
+    <!-- Parental Control & Settings -->
+    <string name="settings">Ajustes</string>
+    <string name="parental_control">Control Parental</string>
+    <string name="parental_control_desc">Protege los ajustes con un código PIN para evitar cambios accidentales</string>
+    <string name="parental_pin_title">Introduce el PIN Parental</string>
+    <string name="parental_pin_hint">Introduce el PIN de 4 dígitos</string>
+    <string name="parental_pin_incorrect">PIN incorrecto. Inténtalo de nuevo.</string>
+    <string name="parental_lock_mode_switch">Bloquear Modo de Vista</string>
+    <string name="parental_lock_mode_switch_desc">Oculta el botón de cambiar modo / editor para que nadie pueda salirse de la vista actual por error</string>
+    <string name="parental_change_pin">Cambiar Código PIN</string>
+    <string name="parental_new_pin">Nuevo PIN de 4 dígitos</string>
+    <string name="parental_confirm_pin">Confirmar PIN</string>
+    <string name="parental_pin_mismatch">Los códigos PIN no coinciden</string>
+    <string name="parental_auto_lock_notice">Los ajustes se bloquearán automáticamente tras 10 segundos de inactividad</string>
 </resources>

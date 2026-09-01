@@ -63,7 +63,11 @@ data class EditorState(
     val preferredExternalAppName: String? = null,
     val appViewMode: AppViewMode = AppViewMode.UNSET,
     val lastPlayedChannelId: String? = null,
-    val lastPlayedGroup: String? = null
+    val lastPlayedGroup: String? = null,
+    val parentalControlEnabled: Boolean = false,
+    val parentalPin: String = "",
+    val lockModeSwitch: Boolean = false,
+    val isParentalUnlocked: Boolean = false
 )
 
 class EditorViewModel : ViewModel() {
@@ -90,6 +94,11 @@ class EditorViewModel : ViewModel() {
     private val _appViewMode = MutableStateFlow(AppViewMode.UNSET)
     private val _lastPlayedChannelId = MutableStateFlow<String?>(null)
     private val _lastPlayedGroup = MutableStateFlow<String?>(null)
+    private val _parentalControlEnabled = MutableStateFlow(false)
+    private val _parentalPin = MutableStateFlow("")
+    private val _lockModeSwitch = MutableStateFlow(false)
+    private val _isParentalUnlocked = MutableStateFlow(false)
+    private var parentalAutoLockJob: kotlinx.coroutines.Job? = null
 
     /** Raw #EXTM3U header of the active playlist, preserved so exports keep playlist-level
      *  attributes (e.g. url-tvg / x-tvg-url). Not part of the UI state. */
@@ -198,32 +207,44 @@ class EditorViewModel : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<EditorState> = combine(
-        _playlists, _activePlaylistId, _channels, _isLoading, _selectedGroup, _searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups, _groups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName, _appViewMode, _lastPlayedChannelId, _lastPlayedGroup
-    ) { args ->
+        combine(_playlists, _activePlaylistId, _channels, _isLoading, _selectedGroup) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
+        combine(_searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
+        combine(_groups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
+        combine(_appViewMode, _lastPlayedChannelId, _lastPlayedGroup, _parentalControlEnabled, _parentalPin) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
+        combine(_lockModeSwitch, _isParentalUnlocked) { a, b -> arrayOf<Any?>(a, b) }
+    ) { group1, group2, group3, group4, group5 ->
         @Suppress("UNCHECKED_CAST")
-        val playlists = args[0] as List<SavedPlaylist>
-        val activeId = args[1] as String?
+        val playlists = group1[0] as List<SavedPlaylist>
+        val activeId = group1[1] as String?
         @Suppress("UNCHECKED_CAST")
-        val channels = args[2] as List<Channel>
-        val isLoading = args[3] as Boolean
-        val group = args[4] as String?
-        val search = args[5] as String
+        val channels = group1[2] as List<Channel>
+        val isLoading = group1[3] as Boolean
+        val group = group1[4] as String?
+
+        val search = group2[0] as String
         @Suppress("UNCHECKED_CAST")
-        val selectedIds = args[6] as Set<String>
+        val selectedIds = group2[1] as Set<String>
         @Suppress("UNCHECKED_CAST")
-        val selectedGrps = args[7] as Set<String>
-        val error = args[8] as String?
+        val selectedGrps = group2[2] as Set<String>
+        val error = group2[3] as String?
         @Suppress("UNCHECKED_CAST")
-        val customGroups = args[9] as Set<String>
+        val customGroups = group2[4] as Set<String>
+
         @Suppress("UNCHECKED_CAST")
-        val allGroups = args[10] as List<String>
-        val playerMode = args[11] as DefaultPlayerMode
-        val extPkg = args[12] as String?
-        val extAct = args[13] as String?
-        val extName = args[14] as String?
-        val viewMode = args[15] as AppViewMode
-        val lastChannelId = args[16] as String?
-        val lastGroup = args[17] as String?
+        val allGroups = group3[0] as List<String>
+        val playerMode = group3[1] as DefaultPlayerMode
+        val extPkg = group3[2] as String?
+        val extAct = group3[3] as String?
+        val extName = group3[4] as String?
+
+        val viewMode = group4[0] as AppViewMode
+        val lastChannelId = group4[1] as String?
+        val lastGroup = group4[2] as String?
+        val parentalEnabled = group4[3] as Boolean
+        val pin = group4[4] as String
+
+        val lockMode = group5[0] as Boolean
+        val unlocked = group5[1] as Boolean
 
         val activeName = playlists.find { it.id == activeId }?.name ?: ""
 
@@ -245,7 +266,11 @@ class EditorViewModel : ViewModel() {
             preferredExternalAppName = extName,
             appViewMode = viewMode,
             lastPlayedChannelId = lastChannelId,
-            lastPlayedGroup = lastGroup
+            lastPlayedGroup = lastGroup,
+            parentalControlEnabled = parentalEnabled,
+            parentalPin = pin,
+            lockModeSwitch = lockMode,
+            isParentalUnlocked = unlocked
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EditorState())
 
@@ -562,6 +587,14 @@ class EditorViewModel : ViewModel() {
                 _selectedGroup.value = lastGroup
             }
 
+            val parentalEnabled = prefs.getBoolean("parental_control_enabled", false)
+            val pin = prefs.getString("parental_pin", "") ?: ""
+            val lockMode = prefs.getBoolean("lock_mode_switch", false)
+            _parentalControlEnabled.value = parentalEnabled
+            _parentalPin.value = pin
+            _lockModeSwitch.value = lockMode
+            _isParentalUnlocked.value = false
+
             loadCustomGroups(prefs)
 
             // Legacy Single Playlist Migration Check
@@ -591,6 +624,49 @@ class EditorViewModel : ViewModel() {
         _appViewMode.value = mode
         val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
         prefs.edit().putString("app_view_mode", mode.name).apply()
+    }
+
+    fun setParentalControl(context: Context, enabled: Boolean, pin: String, lockModeSwitch: Boolean) {
+        _parentalControlEnabled.value = enabled
+        _parentalPin.value = pin
+        _lockModeSwitch.value = lockModeSwitch
+        viewModelScope.launch(Dispatchers.IO) {
+            val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putBoolean("parental_control_enabled", enabled)
+                .putString("parental_pin", pin)
+                .putBoolean("lock_mode_switch", lockModeSwitch)
+                .apply()
+        }
+    }
+
+    fun verifyParentalPin(pin: String): Boolean {
+        val currentPin = _parentalPin.value.ifBlank { "0000" }
+        return pin == currentPin
+    }
+
+    fun unlockParentalSession() {
+        _isParentalUnlocked.value = true
+        resetParentalAutoLockTimer()
+    }
+
+    fun onParentalActivity() {
+        if (_isParentalUnlocked.value) {
+            resetParentalAutoLockTimer()
+        }
+    }
+
+    fun lockParentalSession() {
+        parentalAutoLockJob?.cancel()
+        _isParentalUnlocked.value = false
+    }
+
+    private fun resetParentalAutoLockTimer() {
+        parentalAutoLockJob?.cancel()
+        parentalAutoLockJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(10_000)
+            _isParentalUnlocked.value = false
+        }
     }
 
     fun saveLastPlayedChannel(context: Context, channelId: String, group: String?) {

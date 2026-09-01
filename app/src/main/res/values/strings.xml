@@ -165,4 +165,18 @@
     <string name="simplified_no_playlist">No playlist loaded. Load one from Advanced Mode or paste a URL below.</string>
     <string name="simplified_all_channels">All Channels</string>
     <string name="channels_in_group">%1$s (%2$d channels)</string>
+    <!-- Parental Control & Settings -->
+    <string name="settings">Settings</string>
+    <string name="parental_control">Parental Control</string>
+    <string name="parental_control_desc">Protect settings with a PIN code to avoid accidental changes</string>
+    <string name="parental_pin_title">Enter Parental PIN</string>
+    <string name="parental_pin_hint">Enter 4-digit PIN</string>
+    <string name="parental_pin_incorrect">Incorrect PIN. Try again.</string>
+    <string name="parental_lock_mode_switch">Lock View Mode</string>
+    <string name="parental_lock_mode_switch_desc">Hide the mode switch / editor button so users cannot exit the current view accidentally</string>
+    <string name="parental_change_pin">Change PIN Code</string>
+    <string name="parental_new_pin">New 4-digit PIN</string>
+    <string name="parental_confirm_pin">Confirm PIN</string>
+    <string name="parental_pin_mismatch">PINs do not match</string>
+    <string name="parental_auto_lock_notice">Settings will automatically lock after 10 seconds of inactivity</string>
 </resources>

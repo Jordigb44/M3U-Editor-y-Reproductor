@@ -40,8 +40,10 @@ import com.example.ui.DefaultPlayerMode
 import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
 import com.example.ui.PlayerSession
+import com.example.ui.components.AppSettingsDialog
 import com.example.ui.components.DefaultPlayerDialog
 import com.example.ui.components.ExportDialog
+import com.example.ui.components.ParentalPinDialog
 import com.example.ui.components.PlayChoiceDialog
 import com.example.ui.components.TvFocusHighlightColor
 import com.example.ui.components.dpadFocusable
@@ -81,6 +83,8 @@ fun EditorScreen(
     var exportErrorMessage by remember { mutableStateOf<String?>(null) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showPlayerSettingsDialog by remember { mutableStateOf(false) }
+    var showAppSettingsDialog by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
 
     // Request WRITE_EXTERNAL_STORAGE at runtime (needed on Android 9 / Fire TV SDK 28)
     val writePermissionLauncher = rememberLauncherForActivityResult(
@@ -168,17 +172,25 @@ fun EditorScreen(
                                     )
                                 }
                             } else {
-                                IconButton(
-                                    onClick = { viewModel.setAppViewMode(context, AppViewMode.SIMPLIFIED) },
-                                    modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
-                                ) {
-                                    Icon(Icons.Filled.Tv, contentDescription = stringResource(R.string.mode_switch_to_simplified))
+                                if (!state.parentalControlEnabled || !state.lockModeSwitch) {
+                                    IconButton(
+                                        onClick = { viewModel.setAppViewMode(context, AppViewMode.SIMPLIFIED) },
+                                        modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
+                                    ) {
+                                        Icon(Icons.Filled.Tv, contentDescription = stringResource(R.string.mode_switch_to_simplified))
+                                    }
                                 }
                                 IconButton(
-                                    onClick = { showPlayerSettingsDialog = true },
+                                    onClick = {
+                                        if (state.parentalControlEnabled && !state.isParentalUnlocked) {
+                                            showPinDialog = true
+                                        } else {
+                                            showAppSettingsDialog = true
+                                        }
+                                    },
                                     modifier = Modifier.dpadFocusable(shape = RoundedCornerShape(24.dp))
                                 ) {
-                                    Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.editor_default_player))
+                                    Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings))
                                 }
                                 IconButton(
                                     onClick = { performExport() },
@@ -269,6 +281,25 @@ fun EditorScreen(
                         }
                     )
                 }
+            )
+        }
+
+        if (showPinDialog) {
+            ParentalPinDialog(
+                viewModel = viewModel,
+                onSuccess = {
+                    showPinDialog = false
+                    showAppSettingsDialog = true
+                },
+                onDismiss = { showPinDialog = false }
+            )
+        }
+
+        if (showAppSettingsDialog) {
+            AppSettingsDialog(
+                state = state,
+                viewModel = viewModel,
+                onDismiss = { showAppSettingsDialog = false }
             )
         }
 
