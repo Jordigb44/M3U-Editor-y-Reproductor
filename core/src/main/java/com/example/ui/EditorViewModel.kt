@@ -49,6 +49,8 @@ enum class AppViewMode {
     ADVANCED
 }
 
+const val FAVORITES_GROUP_KEY = "__favorites__"
+
 data class EditorState(
     val playlists: List<SavedPlaylist> = emptyList(),
     val activePlaylistId: String? = null,
@@ -73,7 +75,9 @@ data class EditorState(
     val parentalControlEnabled: Boolean = false,
     val parentalPin: String = "",
     val lockModeSwitch: Boolean = false,
-    val isParentalUnlocked: Boolean = false
+    val isParentalUnlocked: Boolean = false,
+    val favoriteChannelIds: Set<String> = emptySet(),
+    val favoritesEnabled: Boolean = true
 )
 
 class EditorViewModel : ViewModel() {
@@ -107,6 +111,8 @@ class EditorViewModel : ViewModel() {
     private val _lockModeSwitch = MutableStateFlow(false)
     private val _isParentalUnlocked = MutableStateFlow(false)
     private var parentalAutoLockJob: kotlinx.coroutines.Job? = null
+    private val _favoriteChannelIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _favoritesEnabled = MutableStateFlow(true)
 
     private val _epgByChannel = MutableStateFlow<Map<String, List<EpgProgram>>>(emptyMap())
     val epgByChannel: StateFlow<Map<String, List<EpgProgram>>> = _epgByChannel.asStateFlow()
@@ -283,7 +289,7 @@ class EditorViewModel : ViewModel() {
         combine(_searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
         combine(_groups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
         combine(_appViewMode, _lastPlayedChannelId, _lastPlayedGroup, _parentalControlEnabled, _parentalPin) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
-        combine(_lockModeSwitch, _isParentalUnlocked, _appThemeMode, _isPreferencesLoaded) { a, b, c, d -> arrayOf<Any?>(a, b, c, d) }
+        combine(_lockModeSwitch, _isParentalUnlocked, _appThemeMode, _isPreferencesLoaded, combine(_favoritesEnabled, _favoriteChannelIds) { fav, ids -> fav to ids }) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) }
     ) { group1, group2, group3, group4, group5 ->
         @Suppress("UNCHECKED_CAST")
         val playlists = group1[0] as List<SavedPlaylist>
@@ -319,6 +325,10 @@ class EditorViewModel : ViewModel() {
         val unlocked = group5[1] as Boolean
         val themeMode = group5[2] as AppThemeMode
         val isPrefsLoaded = group5[3] as Boolean
+        @Suppress("UNCHECKED_CAST")
+        val favPair = group5[4] as Pair<Boolean, Set<String>>
+        val favsEnabled = favPair.first
+        val favChannelIds = favPair.second
 
         val activeName = playlists.find { it.id == activeId }?.name ?: ""
 
@@ -346,7 +356,9 @@ class EditorViewModel : ViewModel() {
             parentalControlEnabled = parentalEnabled,
             parentalPin = pin,
             lockModeSwitch = lockMode,
-            isParentalUnlocked = unlocked
+            isParentalUnlocked = unlocked,
+            favoriteChannelIds = favChannelIds,
+            favoritesEnabled = favsEnabled
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EditorState())
 
@@ -411,6 +423,26 @@ class EditorViewModel : ViewModel() {
                 _customGroups.value = groups
             } catch (_: Exception) {}
         }
+    }
+
+    private fun saveFavorites(context: Context, favoriteIds: Set<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
+            prefs.edit().putString("favorite_channel_ids", JSONArray(favoriteIds.toList()).toString()).apply()
+        }
+    }
+
+    private fun loadFavorites(prefs: android.content.SharedPreferences) {
+        val favs = prefs.getString("favorite_channel_ids", "")
+        if (!favs.isNullOrBlank()) {
+            try {
+                val arr = JSONArray(favs)
+                val set = mutableSetOf<String>()
+                for (i in 0 until arr.length()) set.add(arr.getString(i))
+                _favoriteChannelIds.value = set
+            } catch (_: Exception) {}
+        }
+        _favoritesEnabled.value = prefs.getBoolean("favorites_enabled", true)
     }
 
     private fun openInputStreamSafely(context: Context, uri: Uri): java.io.InputStream? {
@@ -677,6 +709,7 @@ class EditorViewModel : ViewModel() {
             _isParentalUnlocked.value = false
 
             loadCustomGroups(prefs)
+            loadFavorites(prefs)
 
             // Legacy Single Playlist Migration Check
             val legacyFile = File(context.filesDir, "saved_playlist.m3u")
@@ -737,6 +770,33 @@ class EditorViewModel : ViewModel() {
     fun unlockParentalSession() {
         _isParentalUnlocked.value = true
         resetParentalAutoLockTimer()
+    }
+
+    fun toggleFavorite(context: Context, channelId: String, channelUrl: String? = null) {
+        val current = _favoriteChannelIds.value
+        val isFav = current.contains(channelId) || (channelUrl != null && current.contains(channelUrl))
+        val updated = if (isFav) {
+            current - channelId - (channelUrl ?: "")
+        } else {
+            val toAdd = mutableSetOf(channelId)
+            if (!channelUrl.isNullOrBlank()) toAdd.add(channelUrl)
+            current + toAdd
+        }
+        _favoriteChannelIds.value = updated
+        saveFavorites(context, updated)
+    }
+
+    fun isChannelFavorite(channelId: String, channelUrl: String? = null): Boolean {
+        val current = _favoriteChannelIds.value
+        return current.contains(channelId) || (channelUrl != null && current.contains(channelUrl))
+    }
+
+    fun setFavoritesEnabled(context: Context, enabled: Boolean) {
+        _favoritesEnabled.value = enabled
+        viewModelScope.launch(Dispatchers.IO) {
+            val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("favorites_enabled", enabled).apply()
+        }
     }
 
     fun onParentalActivity() {

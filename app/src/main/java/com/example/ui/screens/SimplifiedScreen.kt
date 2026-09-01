@@ -39,6 +39,7 @@ import com.example.ui.AppViewMode
 import com.example.ui.DefaultPlayerMode
 import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
+import com.example.ui.FAVORITES_GROUP_KEY
 import com.example.ui.PlayerSession
 import com.example.ui.components.AppSettingsDialog
 import com.example.ui.components.ParentalPinDialog
@@ -102,10 +103,14 @@ fun SimplifiedScreen(
     }
 
     // Active channels in currently selected group
-    val activeChannels = remember(state.channels, state.selectedGroup, searchQuery) {
+    val activeChannels = remember(state.channels, state.selectedGroup, searchQuery, state.favoriteChannelIds) {
         state.channels.filter { ch ->
-            (state.selectedGroup == null || ch.groupTitle == state.selectedGroup) &&
-                ch.matchesSearch(searchQuery)
+            val matchesGroup = when (state.selectedGroup) {
+                null -> true
+                FAVORITES_GROUP_KEY -> state.favoriteChannelIds.contains(ch.id) || state.favoriteChannelIds.contains(ch.url)
+                else -> ch.groupTitle == state.selectedGroup
+            }
+            matchesGroup && ch.matchesSearch(searchQuery)
         }
     }
 
@@ -114,8 +119,18 @@ fun SimplifiedScreen(
         state.channels.groupingBy { it.groupTitle }.eachCount()
     }
 
-    val groupsList = remember(state.groups, groupCounts) {
-        listOf<String?>(null) + state.groups.filter { it.isNotBlank() }
+    val favoritesCount = remember(state.channels, state.favoriteChannelIds) {
+        state.channels.count { state.favoriteChannelIds.contains(it.id) || state.favoriteChannelIds.contains(it.url) }
+    }
+
+    val groupsList = remember(state.groups, groupCounts, state.favoritesEnabled, favoritesCount) {
+        val list = mutableListOf<String?>()
+        list.add(null) // Todos los canales
+        if (state.favoritesEnabled) {
+            list.add(FAVORITES_GROUP_KEY)
+        }
+        list.addAll(state.groups.filter { it.isNotBlank() })
+        list
     }
 
     // Channel list scroll state
@@ -185,6 +200,11 @@ fun SimplifiedScreen(
             startIndex = fullListIndex,
             epgUrl = viewModel.activeEpgUrl(),
             simplifiedMode = true,
+            favoriteChannelIds = state.favoriteChannelIds,
+            favoritesEnabled = state.favoritesEnabled,
+            onToggleFavorite = { ch ->
+                viewModel.toggleFavorite(context, ch.id, ch.url)
+            },
             onChannelChanged = { ch ->
                 viewModel.saveLastPlayedChannel(context, ch.id, ch.groupTitle)
             },
@@ -456,8 +476,17 @@ fun SimplifiedScreen(
                                 ) {
                                     itemsIndexed(groupsList) { _, groupName ->
                                         val isSelected = (groupName == state.selectedGroup)
-                                        val count = if (groupName == null) state.channels.size else (groupCounts[groupName] ?: 0)
-                                        val label = groupName ?: stringResource(R.string.simplified_all_channels)
+                                        val isFavGroup = (groupName == FAVORITES_GROUP_KEY)
+                                        val count = when (groupName) {
+                                            null -> state.channels.size
+                                            FAVORITES_GROUP_KEY -> favoritesCount
+                                            else -> groupCounts[groupName] ?: 0
+                                        }
+                                        val label = when (groupName) {
+                                            null -> stringResource(R.string.simplified_all_channels)
+                                            FAVORITES_GROUP_KEY -> stringResource(R.string.favorites_group_name)
+                                            else -> groupName
+                                        }
 
                                         Surface(
                                             modifier = Modifier
@@ -481,9 +510,17 @@ fun SimplifiedScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                                 ) {
                                                     Icon(
-                                                        imageVector = if (groupName == null) Icons.Filled.FolderSpecial else Icons.Filled.Folder,
+                                                        imageVector = when {
+                                                            groupName == null -> Icons.Filled.FolderSpecial
+                                                            isFavGroup -> Icons.Filled.Star
+                                                            else -> Icons.Filled.Folder
+                                                        },
                                                         contentDescription = null,
-                                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        tint = when {
+                                                            isFavGroup -> Color(0xFFFBBF24)
+                                                            isSelected -> MaterialTheme.colorScheme.primary
+                                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                        },
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                     Text(
@@ -532,11 +569,16 @@ fun SimplifiedScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val groupHeaderTitle = when (state.selectedGroup) {
+                                        null -> stringResource(R.string.simplified_all_channels)
+                                        FAVORITES_GROUP_KEY -> stringResource(R.string.favorites_group_name)
+                                        else -> state.selectedGroup ?: ""
+                                    }
                                     Text(
-                                        text = (state.selectedGroup ?: stringResource(R.string.simplified_all_channels)).uppercase(),
+                                        text = groupHeaderTitle.uppercase(),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = if (state.selectedGroup == FAVORITES_GROUP_KEY) Color(0xFFFBBF24) else MaterialTheme.colorScheme.primary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
@@ -549,130 +591,177 @@ fun SimplifiedScreen(
                                     )
                                 }
 
-                                LazyColumn(
-                                    state = channelListState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    itemsIndexed(activeChannels, key = { _, ch -> ch.id }) { index, channel ->
-                                        val isLastPlayed = channel.id == state.lastPlayedChannelId
-                                        val isPreviewSelected = isWideScreen && channel.id == previewChannel?.id
-                                        val (nowProg, _) = viewModel.getNowAndNext(channel, currentTimeMs)
-
-                                        Surface(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .tvFocusable(
-                                                    shape = RoundedCornerShape(14.dp),
-                                                    onClick = { playChannel(channel, index) },
-                                                    onFocusChange = { focused ->
-                                                        if (focused) previewChannelId = channel.id
-                                                    }
-                                                ),
-                                            shape = RoundedCornerShape(14.dp),
-                                            color = when {
-                                                isPreviewSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                                isLastPlayed -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                                                else -> MaterialTheme.colorScheme.surfaceVariant
-                                            },
-                                            border = when {
-                                                isPreviewSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
-                                                isLastPlayed -> BorderStroke(1.5.dp, TvFocusHighlightColor)
-                                                else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                            }
+                                if (activeChannels.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                // Channel Number
-                                                Text(
-                                                    text = "${index + 1}",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.width(28.dp)
-                                                )
+                                            Icon(
+                                                imageVector = if (state.selectedGroup == FAVORITES_GROUP_KEY) Icons.Filled.StarBorder else Icons.Filled.TvOff,
+                                                contentDescription = null,
+                                                tint = if (state.selectedGroup == FAVORITES_GROUP_KEY) Color(0xFFFBBF24).copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(52.dp)
+                                            )
+                                            Text(
+                                                text = if (state.selectedGroup == FAVORITES_GROUP_KEY) {
+                                                    stringResource(R.string.favorites_empty)
+                                                } else {
+                                                    stringResource(R.string.epg_no_info)
+                                                },
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        state = channelListState,
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        itemsIndexed(activeChannels, key = { _, ch -> ch.id }) { index, channel ->
+                                            val isLastPlayed = channel.id == state.lastPlayedChannelId
+                                            val isPreviewSelected = isWideScreen && channel.id == previewChannel?.id
+                                            val isFav = state.favoriteChannelIds.contains(channel.id) || state.favoriteChannelIds.contains(channel.url)
+                                            val (nowProg, _) = viewModel.getNowAndNext(channel, currentTimeMs)
 
-                                                // Channel Logo or Placeholder Badge
-                                                Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = MaterialTheme.colorScheme.surface,
-                                                    modifier = Modifier.size(38.dp)
-                                                ) {
-                                                    if (channel.logoUrl.isNotBlank()) {
-                                                        AsyncImage(
-                                                            model = channel.logoUrl,
-                                                            contentDescription = channel.name,
-                                                            contentScale = ContentScale.Fit,
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .clip(RoundedCornerShape(8.dp))
-                                                                .padding(3.dp)
-                                                        )
-                                                    } else {
-                                                        Box(contentAlignment = Alignment.Center) {
-                                                            Icon(
-                                                                imageVector = Icons.Filled.Tv,
-                                                                contentDescription = null,
-                                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                                modifier = Modifier.size(20.dp)
-                                                            )
+                                            Surface(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .tvFocusable(
+                                                        shape = RoundedCornerShape(14.dp),
+                                                        onClick = { playChannel(channel, index) },
+                                                        onFocusChange = { focused ->
+                                                            if (focused) previewChannelId = channel.id
                                                         }
-                                                    }
+                                                    ),
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = when {
+                                                    isPreviewSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                                    isLastPlayed -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                                },
+                                                border = when {
+                                                    isPreviewSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                                                    isLastPlayed -> BorderStroke(1.5.dp, TvFocusHighlightColor)
+                                                    else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                                 }
-
-                                                // Channel Name + Live Program info
-                                                Column(modifier = Modifier.weight(1f)) {
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    // Channel Number
                                                     Text(
-                                                        text = channel.name,
-                                                        style = MaterialTheme.typography.bodyLarge,
-                                                        fontWeight = if (isLastPlayed || isPreviewSelected) FontWeight.Bold else FontWeight.Medium,
-                                                        color = MaterialTheme.colorScheme.onSurface,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
+                                                        text = "${index + 1}",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.width(28.dp)
                                                     )
 
-                                                    // EPG Now Playing Line
-                                                    if (nowProg != null) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                                            modifier = Modifier.padding(top = 2.dp)
-                                                        ) {
-                                                            Box(
+                                                    // Channel Logo or Placeholder Badge
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = MaterialTheme.colorScheme.surface,
+                                                        modifier = Modifier.size(38.dp)
+                                                    ) {
+                                                        if (channel.logoUrl.isNotBlank()) {
+                                                            AsyncImage(
+                                                                model = channel.logoUrl,
+                                                                contentDescription = channel.name,
+                                                                contentScale = ContentScale.Fit,
                                                                 modifier = Modifier
-                                                                    .size(7.dp)
-                                                                    .background(Color(0xFFEF4444), CircleShape)
+                                                                    .fillMaxSize()
+                                                                    .clip(RoundedCornerShape(8.dp))
+                                                                    .padding(3.dp)
                                                             )
+                                                        } else {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Icon(
+                                                                    imageVector = Icons.Filled.Tv,
+                                                                    contentDescription = null,
+                                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                    modifier = Modifier.size(20.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Channel Name + Live Program info
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = channel.name,
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            fontWeight = if (isLastPlayed || isPreviewSelected) FontWeight.Bold else FontWeight.Medium,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+
+                                                        // EPG Now Playing Line
+                                                        if (nowProg != null) {
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                                                modifier = Modifier.padding(top = 2.dp)
+                                                            ) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .size(7.dp)
+                                                                        .background(Color(0xFFEF4444), CircleShape)
+                                                                )
+                                                                Text(
+                                                                    text = "${nowProg.title} (${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)})",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    fontWeight = FontWeight.SemiBold,
+                                                                    color = MaterialTheme.colorScheme.primary,
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                        } else if (state.selectedGroup == null && channel.groupTitle.isNotBlank()) {
                                                             Text(
-                                                                text = "${nowProg.title} (${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)})",
+                                                                text = channel.groupTitle,
                                                                 style = MaterialTheme.typography.labelSmall,
-                                                                fontWeight = FontWeight.SemiBold,
-                                                                color = MaterialTheme.colorScheme.primary,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                                 maxLines = 1,
                                                                 overflow = TextOverflow.Ellipsis
                                                             )
                                                         }
-                                                    } else if (state.selectedGroup == null && channel.groupTitle.isNotBlank()) {
-                                                        Text(
-                                                            text = channel.groupTitle,
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
+                                                    }
+
+                                                    // Favorite button
+                                                    IconButton(
+                                                        onClick = {
+                                                            viewModel.toggleFavorite(context, channel.id, channel.url)
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (isFav) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                            contentDescription = if (isFav) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites),
+                                                            tint = if (isFav) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                            modifier = Modifier.size(20.dp)
                                                         )
                                                     }
-                                                }
 
-                                                // Play icon
-                                                Icon(
-                                                    imageVector = Icons.Filled.PlayArrow,
-                                                    contentDescription = stringResource(R.string.play),
-                                                    tint = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
+                                                    // Play icon
+                                                    Icon(
+                                                        imageVector = Icons.Filled.PlayArrow,
+                                                        contentDescription = stringResource(R.string.play),
+                                                        tint = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -746,6 +835,23 @@ fun SimplifiedScreen(
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             }
+                                        }
+
+                                        val isPreviewFav = state.favoriteChannelIds.contains(previewChannel.id) || state.favoriteChannelIds.contains(previewChannel.url)
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.toggleFavorite(context, previewChannel.id, previewChannel.url)
+                                            },
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .tvFocusable(shape = CircleShape)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isPreviewFav) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                contentDescription = if (isPreviewFav) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites),
+                                                tint = if (isPreviewFav) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(24.dp)
+                                            )
                                         }
                                     }
 

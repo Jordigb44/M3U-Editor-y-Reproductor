@@ -165,6 +165,14 @@
     <string name="mode_switch_to_simplified">Switch to Simplified View</string>
     <string name="simplified_no_playlist">No playlist loaded. Load one from Advanced Mode or paste a URL below.</string>
     <string name="simplified_all_channels">All Channels</string>
+    <string name="favorites">Favorites</string>
+    <string name="favorites_group_name">⭐ Favorites</string>
+    <string name="favorites_empty">No favorite channels yet.\nPress the star icon on any channel to add it to your favorites.</string>
+    <string name="add_to_favorites">Add to favorites</string>
+    <string name="remove_from_favorites">Remove from favorites</string>
+    <string name="settings_favorites_title">FAVORITES</string>
+    <string name="settings_favorites_enable">Show Favorites Category</string>
+    <string name="settings_favorites_desc">Display the \'⭐ Favorites\' category in the groups list for quick access.</string>
     <string name="channels_in_group">%1$s (%2$d channels)</string>
     <!-- Parental Control & Settings -->
     <string name="settings">Settings</string>

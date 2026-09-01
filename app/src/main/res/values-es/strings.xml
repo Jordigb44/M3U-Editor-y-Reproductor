@@ -165,6 +165,14 @@
     <string name="mode_switch_to_simplified">Cambiar a Modo Simplificado</string>
     <string name="simplified_no_playlist">No hay ninguna lista cargada. Cárgala desde el Modo Avanzado o introduce una URL.</string>
     <string name="simplified_all_channels">Todos los Canales</string>
+    <string name="favorites">Favoritos</string>
+    <string name="favorites_group_name">⭐ Favoritos</string>
+    <string name="favorites_empty">No tienes canales favoritos todavía.\nPulsa la estrella en cualquier canal para añadirlo a favoritos.</string>
+    <string name="add_to_favorites">Añadir a favoritos</string>
+    <string name="remove_from_favorites">Quitar de favoritos</string>
+    <string name="settings_favorites_title">FAVORITOS</string>
+    <string name="settings_favorites_enable">Mostrar sección de Favoritos</string>
+    <string name="settings_favorites_desc">Muestra la categoría \'⭐ Favoritos\' en la lista de grupos para acceder rápidamente a tus canales preferidos.</string>
     <string name="channels_in_group">%1$s (%2$d canales)</string>
     <!-- Parental Control & Settings -->
     <string name="settings">Ajustes</string>

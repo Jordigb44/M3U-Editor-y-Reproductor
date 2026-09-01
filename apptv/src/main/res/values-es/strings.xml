@@ -138,6 +138,11 @@
     <string name="epg_now">Ahora: %1$s</string>
     <string name="epg_next">Sigue: %1$s</string>
     <string name="epg_today_schedule">Guía de Hoy</string>
+    <string name="favorites">Favoritos</string>
+    <string name="favorites_group_name">⭐ Favoritos</string>
+    <string name="favorites_empty">No tienes canales favoritos todavía.\nPulsa la estrella en cualquier canal para añadirlo a favoritos.</string>
+    <string name="add_to_favorites">Añadir a favoritos</string>
+    <string name="remove_from_favorites">Quitar de favoritos</string>
     <string name="tv_channel_list">LISTA DE CANALES</string>
     <string name="tv_channel_list_count">CANALES (%1$d)</string>
     <string name="update_check">BUSCAR ACTUALIZACIONES</string>

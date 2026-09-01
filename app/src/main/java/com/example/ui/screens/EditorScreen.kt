@@ -271,6 +271,11 @@ fun EditorScreen(
                 channels = state.channels,
                 startIndex = fullIndex,
                 epgUrl = viewModel.activeEpgUrl(),
+                favoriteChannelIds = state.favoriteChannelIds,
+                favoritesEnabled = state.favoritesEnabled,
+                onToggleFavorite = { ch ->
+                    viewModel.toggleFavorite(context, ch.id, ch.url)
+                },
                 onChannelChanged = { ch ->
                     viewModel.saveLastPlayedChannel(context, ch.id, ch.groupTitle)
                 },
