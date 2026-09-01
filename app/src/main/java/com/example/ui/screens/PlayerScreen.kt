@@ -1053,11 +1053,16 @@ fun PlayerScreen(
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .tvFocusable(shape = RoundedCornerShape(8.dp)),
+                                            .tvFocusable(
+                                                shape = RoundedCornerShape(8.dp),
+                                                onClick = { selectedDrawerGroup = gName },
+                                                onFocusChange = { focused ->
+                                                    if (focused) selectedDrawerGroup = gName
+                                                }
+                                            ),
                                         color = if (isSelected) TvFocusHighlightColor.copy(alpha = 0.25f) else Color.Transparent,
                                         border = if (isSelected) BorderStroke(1.dp, TvFocusHighlightColor) else null,
-                                        shape = RoundedCornerShape(8.dp),
-                                        onClick = { selectedDrawerGroup = gName }
+                                        shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
                                             text = gLabel,
@@ -1096,17 +1101,19 @@ fun PlayerScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .then(if (shouldHoldInitialFocus) Modifier.focusRequester(drawerFocusRequester) else Modifier)
-                                        .tvFocusable(shape = RoundedCornerShape(10.dp)),
+                                        .tvFocusable(
+                                            shape = RoundedCornerShape(10.dp),
+                                            onClick = {
+                                                val targetIdx = channels.indexOfFirst { it.id == ch.id }
+                                                if (targetIdx >= 0) {
+                                                    currentIndex = targetIdx
+                                                    showChannelList = false
+                                                }
+                                            }
+                                        ),
                                     color = if (isCurrentChannel) TvFocusHighlightColor.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f),
                                     border = if (isCurrentChannel) BorderStroke(1.5.dp, TvFocusHighlightColor) else null,
-                                    shape = RoundedCornerShape(10.dp),
-                                    onClick = {
-                                        val targetIdx = channels.indexOfFirst { it.id == ch.id }
-                                        if (targetIdx >= 0) {
-                                            currentIndex = targetIdx
-                                            showChannelList = false
-                                        }
-                                    }
+                                    shape = RoundedCornerShape(10.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),

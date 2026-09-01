@@ -455,10 +455,13 @@ fun SimplifiedScreen(
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .tvFocusable(shape = RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    viewModel.selectGroup(groupName)
-                                                },
+                                                .tvFocusable(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    onClick = { viewModel.selectGroup(groupName) },
+                                                    onFocusChange = { focused ->
+                                                        if (focused) viewModel.selectGroup(groupName)
+                                                    }
+                                                ),
                                             shape = RoundedCornerShape(12.dp),
                                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                                             border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
@@ -543,15 +546,13 @@ fun SimplifiedScreen(
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .onFocusChanged {
-                                                    if (it.isFocused) {
-                                                        previewChannelId = channel.id
+                                                .tvFocusable(
+                                                    shape = RoundedCornerShape(14.dp),
+                                                    onClick = { playChannel(channel, index) },
+                                                    onFocusChange = { focused ->
+                                                        if (focused) previewChannelId = channel.id
                                                     }
-                                                }
-                                                .tvFocusable(shape = RoundedCornerShape(14.dp))
-                                                .clickable {
-                                                    playChannel(channel, index)
-                                                },
+                                                ),
                                             shape = RoundedCornerShape(14.dp),
                                             color = when {
                                                 isPreviewSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)

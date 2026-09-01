@@ -979,14 +979,16 @@ private fun ChannelListOverlay(
                         val isCurrent = index == displayIndex
                         val epg = epgNow(ch)
                         Surface(
-                            onClick = { onSelect(channels.indexOfFirst { it.id == ch.id }) },
                             shape = RoundedCornerShape(14.dp),
                             color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                             border = if (isCurrent) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(if (isCurrent) Modifier.focusRequester(currentFocusRequester) else Modifier)
-                                .tvFocusable(shape = RoundedCornerShape(14.dp))
+                                .tvFocusable(
+                                    shape = RoundedCornerShape(14.dp),
+                                    onClick = { onSelect(channels.indexOfFirst { it.id == ch.id }) }
+                                )
                         ) {
                             Row(
                                 modifier = Modifier.padding(10.dp),

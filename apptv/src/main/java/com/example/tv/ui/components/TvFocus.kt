@@ -3,7 +3,9 @@ package com.example.tv.ui.components
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,16 +31,31 @@ val TvFocusHighlightColor = Color(0xFF00E5FF)
 fun Modifier.tvFocusable(
     shape: Shape = RoundedCornerShape(16.dp),
     focusBorderWidth: Dp = 4.dp,
-    focusColor: Color = TvFocusHighlightColor
+    focusColor: Color = TvFocusHighlightColor,
+    onClick: (() -> Unit)? = null,
+    onFocusChange: ((Boolean) -> Unit)? = null
 ): Modifier {
     var isFocused by remember { mutableStateOf(false) }
 
     val scaleValue by animateFloatAsState(targetValue = if (isFocused) 1.06f else 1.0f, label = "tvFocusScale")
     val borderWidth by animateDpAsState(targetValue = if (isFocused) focusBorderWidth else 0.dp, label = "tvFocusBorder")
 
-    return this
-        .onFocusChanged { isFocused = it.isFocused }
-        .focusable()
+    val focusModifier = this.onFocusChanged { 
+        isFocused = it.isFocused 
+        onFocusChange?.invoke(it.isFocused)
+    }
+
+    val interactiveModifier = if (onClick != null) {
+        focusModifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
+    } else {
+        focusModifier.focusable()
+    }
+
+    return interactiveModifier
         .scale(scaleValue)
         .border(width = borderWidth, color = if (isFocused) focusColor else Color.Transparent, shape = shape)
 }
