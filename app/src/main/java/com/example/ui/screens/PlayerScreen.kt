@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AspectRatio
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.TvOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -59,6 +61,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -218,6 +221,7 @@ fun PlayerScreen(
     var seekFeedback by remember { mutableStateOf<String?>(null) }
     var epgByChannel by remember { mutableStateOf<Map<String, List<EpgProgram>>?>(null) }
     var epgLoading by remember { mutableStateOf(false) }
+    var showEpgSchedule by remember { mutableStateOf(false) }
     var selectedControl by remember { mutableIntStateOf(1) }
 
     var currentIndex by remember(startIndex) {
@@ -430,6 +434,7 @@ fun PlayerScreen(
 
     val focusRequester = remember { FocusRequester() }
     val drawerFocusRequester = remember { FocusRequester() }
+    val epgDrawerFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
     }
@@ -440,7 +445,20 @@ fun PlayerScreen(
             try {
                 drawerFocusRequester.requestFocus()
             } catch (_: Exception) {}
-        } else {
+        } else if (!showEpgSchedule) {
+            try {
+                focusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
+    }
+
+    LaunchedEffect(showEpgSchedule) {
+        if (showEpgSchedule) {
+            delay(100)
+            try {
+                epgDrawerFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+        } else if (!showChannelList) {
             try {
                 focusRequester.requestFocus()
             } catch (_: Exception) {}
@@ -456,9 +474,19 @@ fun PlayerScreen(
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
 
+                if (showEpgSchedule) {
+                    return@onKeyEvent when (keyEvent.key) {
+                        Key.Back, Key.Escape, Key.DirectionLeft -> {
+                            showEpgSchedule = false
+                            true
+                        }
+                        else -> false
+                    }
+                }
+
                 if (showChannelList) {
                     return@onKeyEvent when (keyEvent.key) {
-                        Key.Back, Key.Escape -> {
+                        Key.Back, Key.Escape, Key.DirectionRight -> {
                             showChannelList = false
                             true
                         }
@@ -471,8 +499,9 @@ fun PlayerScreen(
                         if (showControls && !simplifiedMode) {
                             selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
                         } else {
-                            // Pressing Left while watching video: ONLY Way to Open Channel & Group Drawer!
+                            // Pressing Left while watching video: Opens Channel & Group Drawer!
                             showControls = false
+                            showEpgSchedule = false
                             showChannelList = true
                         }
                         true
@@ -481,8 +510,10 @@ fun PlayerScreen(
                         if (showControls && !simplifiedMode) {
                             selectedControl = (selectedControl + 1) % CONTROL_COUNT
                         } else {
-                            // Pressing Right while watching video: Fast forward 10 seconds (does NOT open drawer)
-                            seekRelative(10_000L)
+                            // Pressing Right while watching video: Opens Today's Full EPG Schedule Drawer!
+                            showControls = false
+                            showChannelList = false
+                            showEpgSchedule = true
                         }
                         true
                     }
@@ -496,6 +527,7 @@ fun PlayerScreen(
                         } else {
                             // Pressing OK / Enter while watching video: Opens TV guide / player controls
                             showChannelList = false
+                            showEpgSchedule = false
                             selectedControl = 0
                             showControls = true
                         }
@@ -504,6 +536,12 @@ fun PlayerScreen(
                     Key.Back, Key.Escape -> {
                         if (showControls) {
                             showControls = false
+                            true
+                        } else if (showChannelList) {
+                            showChannelList = false
+                            true
+                        } else if (showEpgSchedule) {
+                            showEpgSchedule = false
                             true
                         } else {
                             onBack()
@@ -538,6 +576,7 @@ fun PlayerScreen(
                     }
                     Key.Menu -> {
                         showChannelList = false
+                        showEpgSchedule = false
                         showControls = !showControls
                         true
                     }
@@ -550,6 +589,8 @@ fun PlayerScreen(
             ) {
                 if (showChannelList) {
                     showChannelList = false
+                } else if (showEpgSchedule) {
+                    showEpgSchedule = false
                 } else {
                     showControls = !showControls
                 }
@@ -1312,6 +1353,240 @@ fun PlayerScreen(
                                                 contentDescription = null,
                                                 tint = TvFocusHighlightColor,
                                                 modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Today's Full EPG Schedule Drawer (Opens from Right on pressing DirectionRight)
+        val todaySchedule = remember(epgByChannel, channel) {
+            val map = epgByChannel ?: return@remember emptyList<EpgProgram>()
+            val list = XmltvParser.findProgramsForChannel(
+                map,
+                channel.attributes["tvg-id"],
+                channel.attributes["tvg-name"],
+                channel.name
+            ) ?: map[channel.id] ?: return@remember emptyList<EpgProgram>()
+            val now = System.currentTimeMillis()
+            list.filter { it.stopMs >= now }.sortedBy { it.startMs }
+        }
+
+        AnimatedVisibility(
+            visible = showEpgSchedule && !showChannelList && !showControls,
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.52f),
+                color = Color(0xFF0B0F19).copy(alpha = 0.98f),
+                border = BorderStroke(1.5.dp, TvFocusHighlightColor.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    // Header with Channel Logo, Name & Guía de Hoy
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (channel.logoUrl.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color.White.copy(alpha = 0.1f),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = channel.logoUrl,
+                                        contentDescription = channel.name,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .padding(3.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = channel.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "📅 " + stringResource(R.string.epg_today_schedule),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TvFocusHighlightColor,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        IconButton(onClick = { showEpgSchedule = false }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = stringResource(R.string.close),
+                                tint = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.12f),
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+
+                    if (todaySchedule.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (epgLoading) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = TvFocusHighlightColor,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.tv_epg_loading),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White.copy(alpha = 0.7f)
+                                    )
+                                }
+                            } else {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.TvOff,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.epg_no_info),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        val currentTime = System.currentTimeMillis()
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .focusRequester(epgDrawerFocusRequester),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(todaySchedule) { idx, prog ->
+                                val isNow = currentTime in prog.startMs..prog.stopMs
+                                val startTime = formatEpgTime(prog.startMs)
+                                val stopTime = formatEpgTime(prog.stopMs)
+                                var isExpanded by remember { mutableStateOf(false) }
+
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .tvFocusable(
+                                            shape = RoundedCornerShape(14.dp),
+                                            onClick = { isExpanded = !isExpanded }
+                                        ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isNow) Color(0xFF1E293B) else Color.White.copy(alpha = 0.05f),
+                                    border = if (isNow) BorderStroke(1.5.dp, TvFocusHighlightColor) else BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (isNow) {
+                                                    Surface(
+                                                        color = Color(0xFFEF4444),
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = stringResource(R.string.tv_live_badge),
+                                                            color = Color.White,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Black,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Text(
+                                                    text = "$startTime - $stopTime",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isNow) TvFocusHighlightColor else Color(0xFFCBD5E1)
+                                                )
+                                            }
+                                        }
+
+                                        Text(
+                                            text = prog.title,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = if (isNow) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+
+                                        if (isNow) {
+                                            val total = (prog.stopMs - prog.startMs).coerceAtLeast(1L)
+                                            val elapsed = (currentTime - prog.startMs).coerceIn(0L, total)
+                                            val progress = elapsed.toFloat() / total.toFloat()
+                                            LinearProgressIndicator(
+                                                progress = { progress },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(3.dp)
+                                                    .clip(RoundedCornerShape(1.5.dp)),
+                                                color = TvFocusHighlightColor,
+                                                trackColor = Color.White.copy(alpha = 0.15f)
+                                            )
+                                        }
+
+                                        if (prog.description.isNotBlank()) {
+                                            Text(
+                                                text = prog.description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color(0xFF94A3B8),
+                                                maxLines = if (isExpanded || isNow) 6 else 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = 2.dp)
                                             )
                                         }
                                     }

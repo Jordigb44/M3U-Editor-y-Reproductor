@@ -139,6 +139,7 @@
     <string name="tv_epg_loading">Loading guide…</string>
     <string name="epg_now">Now: %1$s</string>
     <string name="epg_next">Next: %1$s</string>
+    <string name="epg_today_schedule">Today\'s Schedule</string>
     <string name="tv_channel_list">CHANNEL LIST</string>
     <string name="tv_channel_list_count">CHANNELS (%1$d)</string>
     <string name="channel_list">Channel list</string>
