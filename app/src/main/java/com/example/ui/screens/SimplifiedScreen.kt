@@ -121,30 +121,27 @@ fun SimplifiedScreen(
     val groupListState = rememberLazyListState()
 
     // Automatically resume playback of last channel on start/open
-    LaunchedEffect(state.channels, state.lastPlayedChannelId) {
-        if (!hasAutoPlayedOnStart && state.channels.isNotEmpty()) {
+    LaunchedEffect(state.channels, state.lastPlayedChannelId, state.isPreferencesLoaded) {
+        if (!hasAutoPlayedOnStart && state.isPreferencesLoaded && state.channels.isNotEmpty()) {
             val lastId = state.lastPlayedChannelId
             if (!lastId.isNullOrBlank()) {
-                val targetIndex = activeChannels.indexOfFirst { it.id == lastId }
-                if (targetIndex >= 0) {
+                val allIndex = state.channels.indexOfFirst { it.id == lastId }
+                if (allIndex >= 0) {
                     hasAutoPlayedOnStart = true
-                    playerSession = PlayerSession(
-                        channels = activeChannels,
-                        index = targetIndex
-                    )
-                } else {
-                    val allIndex = state.channels.indexOfFirst { it.id == lastId }
-                    if (allIndex >= 0) {
-                        hasAutoPlayedOnStart = true
-                        val targetGroup = state.channels[allIndex].groupTitle
-                        viewModel.selectGroup(targetGroup)
-                        val groupChannels = state.channels.filter { it.groupTitle == targetGroup }
-                        val indexInGroup = groupChannels.indexOfFirst { it.id == lastId }.coerceAtLeast(0)
-                        playerSession = PlayerSession(
-                            channels = groupChannels,
-                            index = indexInGroup
-                        )
+                    val lastChannel = state.channels[allIndex]
+                    if (lastChannel.groupTitle.isNotBlank() && state.selectedGroup != lastChannel.groupTitle) {
+                        viewModel.selectGroup(lastChannel.groupTitle)
                     }
+                    val targetGroupChannels = if (lastChannel.groupTitle.isNotBlank()) {
+                        state.channels.filter { it.groupTitle == lastChannel.groupTitle }
+                    } else {
+                        state.channels
+                    }
+                    val indexInGroup = targetGroupChannels.indexOfFirst { it.id == lastId }.coerceAtLeast(0)
+                    playerSession = PlayerSession(
+                        channels = targetGroupChannels,
+                        index = indexInGroup
+                    )
                 }
             }
         }

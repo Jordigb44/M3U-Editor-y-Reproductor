@@ -385,10 +385,20 @@ fun PlayerScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE ||
-                event == androidx.lifecycle.Lifecycle.Event.ON_STOP
-            ) {
-                player.pause()
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE,
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                    player.pause()
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME,
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    if (player.playbackState == Player.STATE_IDLE) {
+                        player.prepare()
+                    }
+                    player.playWhenReady = true
+                    player.play()
+                }
+                else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

@@ -75,14 +75,14 @@ fun M3uEditorApp(
         }
     }
 
-    LaunchedEffect(state.appViewMode) {
-        if (state.appViewMode == AppViewMode.UNSET) {
-            showInitialModeDialog = true
+    LaunchedEffect(state.isPreferencesLoaded, state.appViewMode) {
+        if (state.isPreferencesLoaded) {
+            showInitialModeDialog = (state.appViewMode == AppViewMode.UNSET)
         }
     }
 
     // Initial Mode Selection Dialog (First time user launches app)
-    if (showInitialModeDialog) {
+    if (showInitialModeDialog && state.isPreferencesLoaded) {
         ModeSelectionDialog(
             onSelectMode = { mode ->
                 viewModel.setAppViewMode(context, mode)

@@ -67,6 +67,7 @@ data class EditorState(
     val preferredExternalAppName: String? = null,
     val appViewMode: AppViewMode = AppViewMode.UNSET,
     val appThemeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    val isPreferencesLoaded: Boolean = false,
     val lastPlayedChannelId: String? = null,
     val lastPlayedGroup: String? = null,
     val parentalControlEnabled: Boolean = false,
@@ -98,6 +99,7 @@ class EditorViewModel : ViewModel() {
     private val _preferredExternalAppName = MutableStateFlow<String?>(null)
     private val _appViewMode = MutableStateFlow(AppViewMode.UNSET)
     private val _appThemeMode = MutableStateFlow(AppThemeMode.SYSTEM)
+    private val _isPreferencesLoaded = MutableStateFlow(false)
     private val _lastPlayedChannelId = MutableStateFlow<String?>(null)
     private val _lastPlayedGroup = MutableStateFlow<String?>(null)
     private val _parentalControlEnabled = MutableStateFlow(false)
@@ -255,7 +257,7 @@ class EditorViewModel : ViewModel() {
         combine(_searchQuery, _selectedChannelIds, _selectedGroups, _error, _customGroups) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
         combine(_groups, _defaultPlayerMode, _preferredExternalPackage, _preferredExternalActivity, _preferredExternalAppName) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
         combine(_appViewMode, _lastPlayedChannelId, _lastPlayedGroup, _parentalControlEnabled, _parentalPin) { a, b, c, d, e -> arrayOf<Any?>(a, b, c, d, e) },
-        combine(_lockModeSwitch, _isParentalUnlocked, _appThemeMode) { a, b, c -> arrayOf<Any?>(a, b, c) }
+        combine(_lockModeSwitch, _isParentalUnlocked, _appThemeMode, _isPreferencesLoaded) { a, b, c, d -> arrayOf<Any?>(a, b, c, d) }
     ) { group1, group2, group3, group4, group5 ->
         @Suppress("UNCHECKED_CAST")
         val playlists = group1[0] as List<SavedPlaylist>
@@ -290,6 +292,7 @@ class EditorViewModel : ViewModel() {
         val lockMode = group5[0] as Boolean
         val unlocked = group5[1] as Boolean
         val themeMode = group5[2] as AppThemeMode
+        val isPrefsLoaded = group5[3] as Boolean
 
         val activeName = playlists.find { it.id == activeId }?.name ?: ""
 
@@ -311,6 +314,7 @@ class EditorViewModel : ViewModel() {
             preferredExternalAppName = extName,
             appViewMode = viewMode,
             appThemeMode = themeMode,
+            isPreferencesLoaded = isPrefsLoaded,
             lastPlayedChannelId = lastChannelId,
             lastPlayedGroup = lastGroup,
             parentalControlEnabled = parentalEnabled,
@@ -667,14 +671,16 @@ class EditorViewModel : ViewModel() {
                 switchPlaylistInternal(context, lastActiveId)
                 return@withContext true
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {} finally {
+            _isPreferencesLoaded.value = true
+        }
         return@withContext false
     }
 
     fun setAppViewMode(context: Context, mode: AppViewMode) {
         _appViewMode.value = mode
         val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
-        prefs.edit().putString("app_view_mode", mode.name).apply()
+        prefs.edit().putString("app_view_mode", mode.name).commit()
     }
 
     fun setAppThemeMode(context: Context, mode: AppThemeMode) {
