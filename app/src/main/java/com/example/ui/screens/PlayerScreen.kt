@@ -522,18 +522,18 @@ fun PlayerScreen(
                         player.pause()
                         true
                     }
-                    Key.DirectionUp, Key.PageUp, Key.VolumeDown -> {
-                        if (showControls) {
-                            showControls = false
-                        }
-                        switchChannel(-1)
-                        true
-                    }
-                    Key.DirectionDown, Key.PageDown, Key.VolumeUp -> {
+                    Key.DirectionUp, Key.PageUp, Key.VolumeUp -> {
                         if (showControls) {
                             showControls = false
                         }
                         switchChannel(1)
+                        true
+                    }
+                    Key.DirectionDown, Key.PageDown, Key.VolumeDown -> {
+                        if (showControls) {
+                            showControls = false
+                        }
+                        switchChannel(-1)
                         true
                     }
                     Key.Menu -> {
