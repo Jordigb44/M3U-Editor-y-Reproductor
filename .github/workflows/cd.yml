@@ -47,8 +47,8 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           cp app/build/outputs/apk/release/app-release.apk "M3U-Editor-y-Reproductor-${TAG}-universal.apk"
+          cp app/build/outputs/apk/release/app-release.apk "M3U-Editor-y-Reproductor-${TAG}-tv.apk"
           cp app/build/outputs/apk/release/app-release.apk "M3U-Editor-y-Reproductor-${TAG}-mobile.apk"
-          cp apptv/build/outputs/apk/release/apptv-release.apk "M3U-Editor-y-Reproductor-${TAG}-tv.apk"
           ls -la M3U-Editor-y-Reproductor-*.apk
 
       - name: Create GitHub Release
