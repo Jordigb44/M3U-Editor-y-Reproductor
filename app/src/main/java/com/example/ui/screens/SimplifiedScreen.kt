@@ -22,6 +22,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -563,9 +565,9 @@ fun SimplifiedScreen(
                                             }
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                                             ) {
                                                 // Channel Number
                                                 Text(
@@ -573,8 +575,36 @@ fun SimplifiedScreen(
                                                     style = MaterialTheme.typography.labelMedium,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.width(32.dp)
+                                                    modifier = Modifier.width(28.dp)
                                                 )
+
+                                                // Channel Logo or Placeholder Badge
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = if (channel.logoUrl.isNotBlank()) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant,
+                                                    modifier = Modifier.size(38.dp)
+                                                ) {
+                                                    if (channel.logoUrl.isNotBlank()) {
+                                                        AsyncImage(
+                                                            model = channel.logoUrl,
+                                                            contentDescription = channel.name,
+                                                            contentScale = ContentScale.Fit,
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .clip(RoundedCornerShape(8.dp))
+                                                                .padding(3.dp)
+                                                        )
+                                                    } else {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(
+                                                                imageVector = Icons.Filled.Tv,
+                                                                contentDescription = null,
+                                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
 
                                                 // Channel Name + Live Program info
                                                 Column(modifier = Modifier.weight(1f)) {
@@ -655,20 +685,32 @@ fun SimplifiedScreen(
                                     // Channel Header Card
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primaryContainer,
-                                            modifier = Modifier.size(42.dp)
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (previewChannel.logoUrl.isNotBlank()) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.size(52.dp)
                                         ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Text(
-                                                    text = "${previewIndex + 1}",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            if (previewChannel.logoUrl.isNotBlank()) {
+                                                AsyncImage(
+                                                    model = previewChannel.logoUrl,
+                                                    contentDescription = previewChannel.name,
+                                                    contentScale = ContentScale.Fit,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .padding(4.dp)
                                                 )
+                                            } else {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = "${previewIndex + 1}",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                }
                                             }
                                         }
                                         Column(modifier = Modifier.weight(1f)) {

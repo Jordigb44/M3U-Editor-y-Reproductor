@@ -13,8 +13,8 @@ android {
     applicationId = "com.jordiguixbetancor.m3ueditor"
     minSdk = 24
     targetSdk = 36
-    versionCode = 21
-    versionName = "1.4.4"
+    versionCode = 22
+    versionName = "1.4.5"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -89,8 +89,8 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
-  // implementation(libs.androidx.navigation.compose)
-  // implementation(libs.coil.compose)
+  implementation(libs.coil.compose)
+  implementation(libs.coil.svg)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   // implementation(libs.play.services.location)

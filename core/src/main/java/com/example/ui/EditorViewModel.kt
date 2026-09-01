@@ -117,17 +117,27 @@ class EditorViewModel : ViewModel() {
      *  attributes (e.g. url-tvg / x-tvg-url). Not part of the UI state. */
     private var currentHeader: String = DEFAULT_HEADER
 
-    /** EPG (XMLTV) URL declared in the active playlist header, if any. */
-    fun activeEpgUrl(): String? {
+    /** EPG (XMLTV) URLs declared in the active playlist header, if any. */
+    fun activeEpgUrls(): List<String> {
         val header = currentHeader
-        if (header.isBlank()) return null
-        return Regex("(?:url-tvg|x-tvg-url|tvg-url)=\"([^\"]+)\"")
-            .find(header)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+        if (header.isBlank()) return emptyList()
+        val regex = Regex("""(?i)(?:url-tvg|x-tvg-url|tvg-url)=(?:"([^"]+)"|'([^']+)'|([^\s,]+))""")
+        val matches = regex.findAll(header)
+        val urls = mutableListOf<String>()
+        for (m in matches) {
+            val raw = (m.groupValues[1].ifBlank { null }
+                ?: m.groupValues[2].ifBlank { null }
+                ?: m.groupValues[3]).trim()
+            raw.split(',').map { it.trim() }.filter { it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true) }.forEach { urls.add(it) }
+        }
+        return urls.distinct()
     }
 
+    fun activeEpgUrl(): String? = activeEpgUrls().firstOrNull()
+
     fun loadEpgForActivePlaylist() {
-        val url = activeEpgUrl()
-        if (url.isNullOrBlank()) return
+        val urls = activeEpgUrls()
+        if (urls.isEmpty()) return
         val channels = _channels.value
         if (channels.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
@@ -137,12 +147,22 @@ class EditorViewModel : ViewModel() {
                     channels.mapNotNull { it.attributes["tvg-name"] } +
                     channels.map { it.name } +
                     channels.map { it.id }).filter { it.isNotBlank() }.toSet()
-                val loaded = EpgLoader.load(url, wantedIds)
-                if (loaded != null) {
-                    _epgByChannel.value = loaded
+
+                val aggregated = mutableMapOf<String, List<EpgProgram>>()
+                for (url in urls) {
+                    val loaded = EpgLoader.load(url, wantedIds)
+                    if (loaded != null && loaded.isNotEmpty()) {
+                        for ((k, v) in loaded) {
+                            aggregated[k] = (aggregated[k].orEmpty() + v).distinctBy { it.startMs to it.title }
+                        }
+                    }
                 }
-            } catch (_: Exception) {}
-            _isEpgLoading.value = false
+                if (aggregated.isNotEmpty()) {
+                    _epgByChannel.value = aggregated
+                }
+            } catch (_: Exception) {} finally {
+                _isEpgLoading.value = false
+            }
         }
     }
 

@@ -20,6 +20,8 @@ object XmltvParser {
         var pendingTitle: String? = null
         var pendingDesc: String = ""
 
+        val wantedLower = wantedChannelIds?.map { it.trim().lowercase() }?.filter { it.isNotBlank() }?.toSet()
+
         input.bufferedReader(Charsets.UTF_8).useLines { lines ->
             for (line in lines) {
                 val trimmed = line.trim()
@@ -45,13 +47,14 @@ object XmltvParser {
                         val cid = pendingChannel
                         val s = pendingStart
                         val e = pendingStop
-                        if (!title.isNullOrBlank() && cid != null && s != null && e != null &&
-                            (wantedChannelIds == null || cid in wantedChannelIds)
-                        ) {
-                            val startMs = parseTime(s)
-                            val stopMs = parseTime(e)
-                            if (startMs != null && stopMs != null) {
-                                programs.add(EpgProgram(cid, title, startMs, stopMs, pendingDesc))
+                        if (!title.isNullOrBlank() && cid != null && s != null && e != null) {
+                            val keep = wantedLower == null || cid.trim().lowercase() in wantedLower
+                            if (keep) {
+                                val startMs = parseTime(s)
+                                val stopMs = parseTime(e)
+                                if (startMs != null && stopMs != null) {
+                                    programs.add(EpgProgram(cid, title, startMs, stopMs, pendingDesc))
+                                }
                             }
                         }
                         pendingChannel = null
@@ -66,6 +69,17 @@ object XmltvParser {
         return programs
     }
 
+    private fun normalize(str: String?): String {
+        if (str.isNullOrBlank()) return ""
+        return str.lowercase()
+            .replace(Regex("""^\[[^]]*\]\s*"""), "")
+            .replace(Regex("""^[a-zA-Z]{2,3}\s*:\s*"""), "")
+            .replace(Regex("""^[a-zA-Z]{2,3}\s*\|\s*"""), "")
+            .replace(Regex("""\b(fhd|uhd|4k|hd|sd|hevc|h265|1080p|720p)\b""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""[^a-zA-Z0-9]"""), "")
+            .trim()
+    }
+
     /** Helper to find matching programs for a channel by tvg-id, tvg-name, or channel name. */
     fun findProgramsForChannel(
         epgByChannel: Map<String, List<EpgProgram>>,
@@ -73,15 +87,32 @@ object XmltvParser {
         tvgName: String?,
         channelName: String?
     ): List<EpgProgram>? {
-        if (!tvgId.isNullOrBlank() && epgByChannel.containsKey(tvgId)) {
-            return epgByChannel[tvgId]
+        val candidates = listOfNotNull(tvgId, tvgName, channelName).map { it.trim() }.filter { it.isNotBlank() }
+        if (candidates.isEmpty()) return null
+
+        // 1. Direct exact match
+        for (cand in candidates) {
+            epgByChannel[cand]?.let { return it }
         }
-        if (!tvgName.isNullOrBlank() && epgByChannel.containsKey(tvgName)) {
-            return epgByChannel[tvgName]
+
+        // 2. Case-insensitive match
+        for (cand in candidates) {
+            val lower = cand.lowercase()
+            for ((key, list) in epgByChannel) {
+                if (key.trim().lowercase() == lower) return list
+            }
         }
-        if (!channelName.isNullOrBlank() && epgByChannel.containsKey(channelName)) {
-            return epgByChannel[channelName]
+
+        // 3. Normalized name match
+        for (cand in candidates) {
+            val normCand = normalize(cand)
+            if (normCand.isNotBlank()) {
+                for ((key, list) in epgByChannel) {
+                    if (normalize(key) == normCand) return list
+                }
+            }
         }
+
         return null
     }
 

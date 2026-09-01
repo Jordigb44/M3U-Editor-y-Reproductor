@@ -40,11 +40,14 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -1087,8 +1090,36 @@ fun PlayerScreen(
                                             color = if (isCurrentChannel) TvFocusHighlightColor else Color.White.copy(alpha = 0.5f),
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.width(30.dp)
+                                            modifier = Modifier.width(26.dp)
                                         )
+
+                                        // Channel logo or icon
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color.White.copy(alpha = 0.08f),
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            if (ch.logoUrl.isNotBlank()) {
+                                                AsyncImage(
+                                                    model = ch.logoUrl,
+                                                    contentDescription = ch.name,
+                                                    contentScale = ContentScale.Fit,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .padding(2.dp)
+                                                )
+                                            } else {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Tv,
+                                                        contentDescription = null,
+                                                        tint = Color.White.copy(alpha = 0.5f),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
 
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(

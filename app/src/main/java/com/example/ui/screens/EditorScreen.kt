@@ -27,8 +27,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -528,6 +531,34 @@ fun ChannelsTab(
             items(filteredChannels, key = { it.id }) { channel ->
                 val isSelected = state.selectedChannelIds.contains(channel.id)
                 ListItem(
+                    leadingContent = {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (channel.logoUrl.isNotBlank()) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            if (channel.logoUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = channel.logoUrl,
+                                    contentDescription = channel.name,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .padding(3.dp)
+                                )
+                            } else {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Tv,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
                     headlineContent = { Text(channel.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium) },
                     supportingContent = {
                         val (nowProg, _) = viewModel.getNowAndNext(channel)

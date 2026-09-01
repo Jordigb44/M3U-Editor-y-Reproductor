@@ -78,23 +78,32 @@ object M3uParser {
                 duration = beforeComma.substring(8, spaceIndex).trim()
                 val attrsStr = beforeComma.substring(spaceIndex).trim()
 
-                val regex = Regex("([a-zA-Z0-9\\-]+)=\"([^\"]*)\"")
+                val regex = Regex("""([a-zA-Z0-9_\-]+)=(?:"([^"]*)"|'([^']*)'|([^\s,]+))""")
                 val matches = regex.findAll(attrsStr)
                 for (match in matches) {
-                    attributes[match.groupValues[1]] = match.groupValues[2]
+                    val key = match.groupValues[1]
+                    val value = (match.groupValues[2].ifBlank { null }
+                        ?: match.groupValues[3].ifBlank { null }
+                        ?: match.groupValues[4]).trim()
+                    attributes[key] = value
                 }
             } else if (beforeComma.length > 8) {
                 duration = beforeComma.substring(8).trim()
             }
         }
 
-        val groupTitle = attributes.remove("group-title") ?: "Uncategorized"
-        val logoUrl = attributes.remove("tvg-logo") ?: ""
+        val groupTitle = attributes.remove("group-title") ?: attributes.remove("group_title") ?: "Uncategorized"
+        val logoUrl = attributes.remove("tvg-logo")
+            ?: attributes.remove("tvg_logo")
+            ?: attributes.remove("logo")
+            ?: attributes.remove("url-logo")
+            ?: attributes.remove("logo-url")
+            ?: ""
 
         return Channel(
             name = name,
             groupTitle = if (groupTitle.isBlank()) "Uncategorized" else groupTitle,
-            logoUrl = logoUrl,
+            logoUrl = logoUrl.trim(),
             url = url,
             duration = duration,
             attributes = attributes

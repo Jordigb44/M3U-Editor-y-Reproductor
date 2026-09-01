@@ -10,6 +10,16 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.SvgDecoder
+import okhttp3.OkHttpClient
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 import com.example.ui.AppThemeMode
 import com.example.ui.AppViewMode
 import com.example.ui.DeviceMode
@@ -27,6 +37,47 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Configure resilient Coil ImageLoader with SVG support and permissive SSL for IPTV logos
+        val imageLoader = ImageLoader.Builder(this)
+            .components {
+                add(SvgDecoder.Factory())
+            }
+            .okHttpClient {
+                try {
+                    val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
+                        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+                    })
+                    val sslContext = SSLContext.getInstance("TLS")
+                    sslContext.init(null, trustAll, SecureRandom())
+                    OkHttpClient.Builder()
+                        .sslSocketFactory(sslContext.socketFactory, trustAll[0] as X509TrustManager)
+                        .hostnameVerifier { _, _ -> true }
+                        .followRedirects(true)
+                        .followSslRedirects(true)
+                        .connectTimeout(15, TimeUnit.SECONDS)
+                        .readTimeout(30, TimeUnit.SECONDS)
+                        .addInterceptor { chain ->
+                            val request = chain.request().newBuilder()
+                                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                                .header("Accept", "image/*,*/*;q=0.8")
+                                .build()
+                            chain.proceed(request)
+                        }
+                        .build()
+                } catch (_: Exception) {
+                    OkHttpClient.Builder()
+                        .followRedirects(true)
+                        .followSslRedirects(true)
+                        .build()
+                }
+            }
+            .crossfade(true)
+            .build()
+        Coil.setImageLoader(imageLoader)
+
         val isTv = DeviceMode.isTv(this)
         setContent {
             val viewModel: EditorViewModel = viewModel()

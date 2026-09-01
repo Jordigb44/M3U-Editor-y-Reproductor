@@ -4,8 +4,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.BufferedInputStream
+import java.io.InputStream
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 /**
  * Downloads and caches the XMLTV guide of the active playlist (per app run).
@@ -18,8 +25,9 @@ object EpgLoader {
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .followRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .followSslRedirects(true)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val request = chain.request().newBuilder()
                     .header("User-Agent", USER_AGENT)
@@ -30,6 +38,35 @@ object EpgLoader {
             .build()
     }
 
+    private val lenientClient: OkHttpClient by lazy {
+        try {
+            val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            })
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAll, SecureRandom())
+            OkHttpClient.Builder()
+                .sslSocketFactory(sslContext.socketFactory, trustAll[0] as X509TrustManager)
+                .hostnameVerifier { _, _ -> true }
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .addInterceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .header("User-Agent", USER_AGENT)
+                        .header("Accept", "*/*")
+                        .build()
+                    chain.proceed(request)
+                }
+                .build()
+        } catch (_: Exception) {
+            client
+        }
+    }
+
     private var cacheUrl: String? = null
     private var cache: Map<String, List<EpgProgram>>? = null
 
@@ -37,33 +74,59 @@ object EpgLoader {
     suspend fun load(url: String, wantedChannelIds: Set<String>): Map<String, List<EpgProgram>>? =
         withContext(Dispatchers.IO) {
             if (cacheUrl == url && cache != null) return@withContext cache
-            val grouped = try {
-                val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    null
-                } else {
-                    val body = response.body ?: null
-                    if (body == null) {
-                        null
-                    } else {
-                        body.byteStream().use { stream ->
-                            val input = if (url.endsWith(".gz", ignoreCase = true)) {
-                                GZIPInputStream(stream)
-                            } else {
-                                stream
-                            }
-                            XmltvParser.parse(input, wantedChannelIds).groupBy { it.channelId }
-                        }
-                    }
-                }
-            } catch (_: Exception) {
-                null
+
+            // Try standard client first, then fallback to lenient client
+            var result = tryDownloadAndParse(client, url, wantedChannelIds)
+            if (result == null) {
+                result = tryDownloadAndParse(lenientClient, url, wantedChannelIds)
             }
-            if (grouped != null) {
+
+            if (result != null && result.isNotEmpty()) {
                 cacheUrl = url
-                cache = grouped
+                cache = result
             }
-            grouped
+            result
         }
+
+    private fun tryDownloadAndParse(
+        httpClient: OkHttpClient,
+        url: String,
+        wantedChannelIds: Set<String>
+    ): Map<String, List<EpgProgram>>? {
+        return try {
+            val request = Request.Builder().url(url).build()
+            val response = httpClient.newCall(request).execute()
+            if (!response.isSuccessful) return null
+            val body = response.body ?: return null
+
+            body.byteStream().use { rawStream ->
+                val decodedStream = wrapStream(rawStream, url)
+                XmltvParser.parse(decodedStream, wantedChannelIds).groupBy { it.channelId }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Wraps stream in GZIPInputStream if GZIP header magic bytes (0x1f 0x8b) are present or url ends in .gz */
+    private fun wrapStream(rawStream: InputStream, url: String): InputStream {
+        val buffered = BufferedInputStream(rawStream, 8192)
+        buffered.mark(4)
+        val b1 = buffered.read()
+        val b2 = buffered.read()
+        buffered.reset()
+        val isGzipMagic = (b1 == 0x1f && b2 == 0x8b)
+        val isGzipUrl = url.endsWith(".gz", ignoreCase = true)
+
+        return if (isGzipMagic || isGzipUrl) {
+            try {
+                GZIPInputStream(buffered)
+            } catch (_: Exception) {
+                buffered.reset()
+                buffered
+            }
+        } else {
+            buffered
+        }
+    }
 }
