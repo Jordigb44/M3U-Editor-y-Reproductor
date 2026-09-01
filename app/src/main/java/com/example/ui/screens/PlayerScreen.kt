@@ -478,16 +478,22 @@ fun PlayerScreen(
                 }
 
                 when (keyEvent.key) {
-                    Key.DirectionLeft, Key.DirectionRight -> {
+                    Key.DirectionLeft -> {
                         if (showControls) {
-                            if (keyEvent.key == Key.DirectionLeft) {
-                                selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
-                            } else {
-                                selectedControl = (selectedControl + 1) % CONTROL_COUNT
-                            }
+                            selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
                         } else {
-                            // User pressed Left or Right while watching video: Open Channel & Group Guide!
+                            // Pressing Left while watching video: ONLY Way to Open Channel & Group Drawer!
+                            showControls = false
                             showChannelList = true
+                        }
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        if (showControls) {
+                            selectedControl = (selectedControl + 1) % CONTROL_COUNT
+                        } else {
+                            // Pressing Right while watching video: Fast forward 10 seconds (does NOT open drawer)
+                            seekRelative(10_000L)
                         }
                         true
                     }
@@ -495,9 +501,21 @@ fun PlayerScreen(
                         if (showControls) {
                             activateControl(selectedControl)
                         } else {
-                            showChannelList = true
+                            // Pressing OK / Enter while watching video: ONLY opens player controls (Play/Pause, timeline, etc.)
+                            showChannelList = false
+                            selectedControl = 0
+                            showControls = true
                         }
                         true
+                    }
+                    Key.Back, Key.Escape -> {
+                        if (showControls) {
+                            showControls = false
+                            true
+                        } else {
+                            onBack()
+                            true
+                        }
                     }
                     Key.MediaPlayPause -> {
                         togglePlay()
@@ -512,14 +530,21 @@ fun PlayerScreen(
                         true
                     }
                     Key.DirectionUp, Key.PageUp, Key.VolumeDown -> {
+                        if (showControls) {
+                            showControls = false
+                        }
                         switchChannel(-1)
                         true
                     }
                     Key.DirectionDown, Key.PageDown, Key.VolumeUp -> {
+                        if (showControls) {
+                            showControls = false
+                        }
                         switchChannel(1)
                         true
                     }
                     Key.Menu -> {
+                        showChannelList = false
                         showControls = !showControls
                         true
                     }
@@ -530,7 +555,11 @@ fun PlayerScreen(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                showControls = !showControls
+                if (showChannelList) {
+                    showChannelList = false
+                } else {
+                    showControls = !showControls
+                }
             }
     ) {
         AndroidView(
@@ -689,7 +718,7 @@ fun PlayerScreen(
 
         // OSD Controls Overlay
         AnimatedVisibility(
-            visible = showControls,
+            visible = showControls && !showChannelList,
             enter = fadeIn(tween(150)),
             exit = fadeOut(tween(200)),
             modifier = Modifier.fillMaxSize()
@@ -947,7 +976,7 @@ fun PlayerScreen(
         }
 
         AnimatedVisibility(
-            visible = showChannelList,
+            visible = showChannelList && !showControls,
             enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
             exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut(),
             modifier = Modifier.align(Alignment.CenterStart)

@@ -415,15 +415,20 @@ fun PlayerScreen(
                 }
 
                 when (keyEvent.key) {
-                    Key.DirectionLeft, Key.DirectionRight -> {
+                    Key.DirectionLeft -> {
                         if (showControls) {
-                            if (keyEvent.key == Key.DirectionLeft) {
-                                selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
-                            } else {
-                                selectedControl = (selectedControl + 1) % CONTROL_COUNT
-                            }
+                            selectedControl = (selectedControl + CONTROL_COUNT - 1) % CONTROL_COUNT
                         } else {
+                            showControls = false
                             showChannelList = true
+                        }
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        if (showControls) {
+                            selectedControl = (selectedControl + 1) % CONTROL_COUNT
+                        } else {
+                            seekRelative(10_000L)
                         }
                         true
                     }
@@ -431,9 +436,20 @@ fun PlayerScreen(
                         if (showControls) {
                             activateControl(selectedControl)
                         } else {
-                            showChannelList = true
+                            showChannelList = false
+                            selectedControl = 0
+                            showControls = true
                         }
                         true
+                    }
+                    Key.Back, Key.Escape -> {
+                        if (showControls) {
+                            showControls = false
+                            true
+                        } else {
+                            onBack()
+                            true
+                        }
                     }
                     Key.MediaPlayPause -> {
                         togglePlay()
@@ -448,28 +464,36 @@ fun PlayerScreen(
                         true
                     }
                     Key.DirectionUp, Key.PageUp, Key.VolumeDown -> {
+                        if (showControls) {
+                            showControls = false
+                        }
                         switchChannel(-1)
                         true
                     }
                     Key.DirectionDown, Key.PageDown, Key.VolumeUp -> {
+                        if (showControls) {
+                            showControls = false
+                        }
                         switchChannel(1)
                         true
                     }
-                    Key.Back, Key.Escape -> {
-                        onBack()
+                    Key.Menu -> {
+                        showChannelList = false
+                        showControls = !showControls
                         true
                     }
-                    else -> {
-                        showControls = true
-                        false
-                    }
+                    else -> false
                 }
             }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                showControls = !showControls
+                if (showChannelList) {
+                    showChannelList = false
+                } else {
+                    showControls = !showControls
+                }
             }
     ) {
         // ---------- Video surface ----------
