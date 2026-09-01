@@ -185,4 +185,10 @@
     <string name="epg_no_info">No TV guide information available</string>
     <string name="epg_guide_title">TV Guide (EPG)</string>
     <string name="play_channel">Play Channel</string>
+    <!-- Theme Settings -->
+    <string name="app_theme_title">App Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="open_external_player">External Player</string>
 </resources>

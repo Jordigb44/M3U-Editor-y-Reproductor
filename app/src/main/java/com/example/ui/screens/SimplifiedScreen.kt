@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,11 +34,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.Channel
 import com.example.ui.AppViewMode
+import com.example.ui.DefaultPlayerMode
 import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
 import com.example.ui.PlayerSession
 import com.example.ui.components.AppSettingsDialog
 import com.example.ui.components.ParentalPinDialog
+import com.example.ui.components.PlayChoiceDialog
 import com.example.ui.components.TvFocusHighlightColor
 import com.example.ui.components.tvFocusable
 import com.example.ui.components.tvRing
@@ -184,6 +187,61 @@ fun SimplifiedScreen(
             }
         )
         return
+    }
+
+    var pendingChoiceChannel by remember { mutableStateOf<Channel?>(null) }
+
+    fun playChannel(channel: Channel, index: Int) {
+        previewChannelId = channel.id
+        viewModel.saveLastPlayedChannel(context, channel.id, state.selectedGroup)
+        when (state.defaultPlayerMode) {
+            DefaultPlayerMode.INTERNAL -> {
+                playerSession = PlayerSession(
+                    channels = activeChannels,
+                    index = index
+                )
+            }
+            DefaultPlayerMode.EXTERNAL -> {
+                launchExternalPlayer(
+                    context = context,
+                    channelUrl = channel.url,
+                    channelName = channel.name,
+                    targetPackage = state.preferredExternalPackage,
+                    targetActivity = state.preferredExternalActivity
+                )
+            }
+            DefaultPlayerMode.ASK -> {
+                pendingChoiceChannel = channel
+            }
+        }
+    }
+
+    if (pendingChoiceChannel != null) {
+        val ch = pendingChoiceChannel!!
+        PlayChoiceDialog(
+            channel = ch,
+            onDismiss = { pendingChoiceChannel = null },
+            onPlayInternal = {
+                val idx = activeChannels.indexOfFirst { it.id == ch.id }
+                if (idx >= 0) {
+                    playerSession = PlayerSession(channels = activeChannels, index = idx)
+                }
+                pendingChoiceChannel = null
+            },
+            onPlayExternal = {
+                launchExternalPlayer(
+                    context = context,
+                    channelUrl = ch.url,
+                    channelName = ch.name,
+                    targetPackage = state.preferredExternalPackage,
+                    targetActivity = state.preferredExternalActivity
+                )
+                pendingChoiceChannel = null
+            },
+            onSetDefaultMode = { mode, pkg, act, name ->
+                viewModel.setDefaultPlayerMode(context, mode, pkg, act, name)
+            }
+        )
     }
 
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -493,12 +551,7 @@ fun SimplifiedScreen(
                                                 }
                                                 .tvFocusable(shape = RoundedCornerShape(14.dp))
                                                 .clickable {
-                                                    previewChannelId = channel.id
-                                                    viewModel.saveLastPlayedChannel(context, channel.id, state.selectedGroup)
-                                                    playerSession = PlayerSession(
-                                                        channels = activeChannels,
-                                                        index = index
-                                                    )
+                                                    playChannel(channel, index)
                                                 },
                                             shape = RoundedCornerShape(14.dp),
                                             color = when {
@@ -795,32 +848,57 @@ fun SimplifiedScreen(
                                         }
                                     }
 
-                                    // Big Play Button
-                                    Button(
-                                        onClick = {
-                                            viewModel.saveLastPlayedChannel(context, previewChannel.id, state.selectedGroup)
-                                            playerSession = PlayerSession(
-                                                channels = activeChannels,
-                                                index = previewIndex
-                                            )
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(48.dp)
-                                            .tvFocusable(shape = RoundedCornerShape(12.dp)),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        )
+                                    // Play Actions (Integrated & External)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            text = stringResource(R.string.play_channel),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Button(
+                                            onClick = {
+                                                playChannel(previewChannel, previewIndex)
+                                            },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        ) {
+                                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                text = stringResource(R.string.play_channel),
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                viewModel.saveLastPlayedChannel(context, previewChannel.id, state.selectedGroup)
+                                                launchExternalPlayer(
+                                                    context = context,
+                                                    channelUrl = previewChannel.url,
+                                                    channelName = previewChannel.name,
+                                                    targetPackage = state.preferredExternalPackage,
+                                                    targetActivity = state.preferredExternalActivity
+                                                )
+                                            },
+                                            modifier = Modifier
+                                                .height(48.dp)
+                                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.AutoMirrored.Filled.OpenInNew,
+                                                contentDescription = stringResource(R.string.open_external_player),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
                                 }
                             }

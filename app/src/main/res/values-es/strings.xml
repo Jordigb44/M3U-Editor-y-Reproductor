@@ -185,4 +185,10 @@
     <string name="epg_no_info">Sin información de programación</string>
     <string name="epg_guide_title">Guía de Televisión (EPG)</string>
     <string name="play_channel">Reproducir Canal</string>
+    <!-- Theme Settings -->
+    <string name="app_theme_title">Tema de la aplicación</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_dark">Oscuro</string>
+    <string name="theme_light">Claro</string>
+    <string name="open_external_player">Reproductor Externo</string>
 </resources>

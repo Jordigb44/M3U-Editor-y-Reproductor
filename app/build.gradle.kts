@@ -13,8 +13,8 @@ android {
     applicationId = "com.jordiguixbetancor.m3ueditor"
     minSdk = 24
     targetSdk = 36
-    versionCode = 19
-    versionName = "1.4.2"
+    versionCode = 20
+    versionName = "1.4.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

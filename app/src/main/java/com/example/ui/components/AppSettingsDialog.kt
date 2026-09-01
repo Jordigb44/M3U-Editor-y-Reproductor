@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.ui.AppViewMode
 import com.example.ui.DefaultPlayerMode
@@ -225,7 +226,71 @@ fun AppSettingsDialog(
                     }
                 }
 
-                // Section 3: Parental Control
+                // Section 3: App Theme (Claro / Oscuro / Sistema)
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.app_theme_title).uppercase(),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val themeOptions = listOf(
+                                com.example.ui.AppThemeMode.SYSTEM to (stringResource(R.string.theme_system) to Icons.Filled.BrightnessAuto),
+                                com.example.ui.AppThemeMode.DARK to (stringResource(R.string.theme_dark) to Icons.Filled.DarkMode),
+                                com.example.ui.AppThemeMode.LIGHT to (stringResource(R.string.theme_light) to Icons.Filled.LightMode)
+                            )
+
+                            themeOptions.forEach { (mode, pair) ->
+                                val (title, icon) = pair
+                                val isSelected = (state.appThemeMode == mode)
+                                Button(
+                                    onClick = {
+                                        viewModel.setAppThemeMode(context, mode)
+                                        viewModel.onParentalActivity()
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Section 4: Parental Control
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

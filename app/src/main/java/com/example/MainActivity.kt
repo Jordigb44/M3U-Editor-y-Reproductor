@@ -5,12 +5,15 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.AppThemeMode
 import com.example.ui.AppViewMode
 import com.example.ui.DeviceMode
+import com.example.ui.EditorState
 import com.example.ui.EditorViewModel
 import com.example.ui.LocalIsTvMode
 import com.example.ui.PlayerKeyRouter
@@ -26,9 +29,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val isTv = DeviceMode.isTv(this)
         setContent {
+            val viewModel: EditorViewModel = viewModel()
+            val state by viewModel.state.collectAsState()
+            val isDark = when (state.appThemeMode) {
+                AppThemeMode.DARK -> true
+                AppThemeMode.LIGHT -> false
+                AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
             CompositionLocalProvider(LocalIsTvMode provides isTv) {
-                MyApplicationTheme {
-                    M3uEditorApp()
+                MyApplicationTheme(darkTheme = isDark) {
+                    M3uEditorApp(viewModel = viewModel, state = state)
                 }
             }
         }
@@ -49,9 +59,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun M3uEditorApp() {
-    val viewModel: EditorViewModel = viewModel()
-    val state by viewModel.state.collectAsState()
+fun M3uEditorApp(
+    viewModel: EditorViewModel = viewModel(),
+    state: EditorState = viewModel.state.collectAsState().value
+) {
     val context = LocalContext.current
     
     var currentScreen by rememberSaveable { mutableStateOf("home") }

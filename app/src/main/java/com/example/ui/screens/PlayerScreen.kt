@@ -427,8 +427,22 @@ fun PlayerScreen(
     }
 
     val focusRequester = remember { FocusRequester() }
+    val drawerFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(showChannelList) {
+        if (showChannelList) {
+            delay(100)
+            try {
+                drawerFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+        } else {
+            try {
+                focusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
     }
 
     Box(
@@ -928,15 +942,14 @@ fun PlayerScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .widthIn(min = 360.dp, max = 540.dp)
-                    .fillMaxWidth(0.55f),
+                    .fillMaxWidth(0.48f),
                 color = Color(0xFF0B0F19).copy(alpha = 0.96f),
                 border = BorderStroke(1.5.dp, TvFocusHighlightColor.copy(alpha = 0.4f))
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(14.dp)
+                        .padding(12.dp)
                 ) {
                     // Header
                     Row(
@@ -972,24 +985,24 @@ fun PlayerScreen(
 
                     HorizontalDivider(
                         color = Color.White.copy(alpha = 0.15f),
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(vertical = 6.dp)
                     )
 
                     // 2-Column Split: Groups on Left, Channels on Right
                     Row(
                         modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // LEFT: Groups list
                         Surface(
                             modifier = Modifier
-                                .width(160.dp)
+                                .width(135.dp)
                                 .fillMaxHeight(),
                             color = Color.White.copy(alpha = 0.05f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             LazyColumn(
-                                modifier = Modifier.fillMaxSize().padding(6.dp),
+                                modifier = Modifier.fillMaxSize().padding(4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 items(playerGroups) { gName ->
@@ -1011,7 +1024,7 @@ fun PlayerScreen(
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
                                         )
                                     }
                                 }
@@ -1032,13 +1045,15 @@ fun PlayerScreen(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            itemsIndexed(drawerChannels, key = { _, ch -> ch.id }) { _, ch ->
+                            itemsIndexed(drawerChannels, key = { _, ch -> ch.id }) { idx, ch ->
                                 val isCurrentChannel = ch.id == channel.id
+                                val shouldHoldInitialFocus = (isCurrentChannel || (idx == 0 && drawerChannels.none { it.id == channel.id }))
                                 val (nowProg, _) = epgNowNextFor(ch) ?: (null to null)
 
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .then(if (shouldHoldInitialFocus) Modifier.focusRequester(drawerFocusRequester) else Modifier)
                                         .tvFocusable(shape = RoundedCornerShape(10.dp)),
                                     color = if (isCurrentChannel) TvFocusHighlightColor.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f),
                                     border = if (isCurrentChannel) BorderStroke(1.5.dp, TvFocusHighlightColor) else null,
