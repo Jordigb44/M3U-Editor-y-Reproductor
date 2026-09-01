@@ -179,4 +179,10 @@
     <string name="parental_confirm_pin">Confirm PIN</string>
     <string name="parental_pin_mismatch">PINs do not match</string>
     <string name="parental_auto_lock_notice">Settings will automatically lock after 10 seconds of inactivity</string>
+    <!-- TV Guide & EPG -->
+    <string name="epg_now_playing">NOW PLAYING</string>
+    <string name="epg_up_next">UP NEXT</string>
+    <string name="epg_no_info">No TV guide information available</string>
+    <string name="epg_guide_title">TV Guide (EPG)</string>
+    <string name="play_channel">Play Channel</string>
 </resources>

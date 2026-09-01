@@ -42,7 +42,16 @@ import com.example.ui.components.TvFocusHighlightColor
 import com.example.ui.components.tvFocusable
 import com.example.ui.components.tvRing
 import com.jordiguixbetancor.m3ueditor.R
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private fun formatEpgTime(timeMs: Long): String {
+    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return sdf.format(Date(timeMs))
+}
 
 private fun Channel.matchesSearch(query: String): Boolean =
     query.isBlank() ||
@@ -63,6 +72,19 @@ fun SimplifiedScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var hasAutoPlayedOnStart by rememberSaveable { mutableStateOf(false) }
+    var previewChannelId by remember { mutableStateOf<String?>(state.lastPlayedChannelId) }
+    var currentTimeMs by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    // Live EPG clock ticker every 30s
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            currentTimeMs = System.currentTimeMillis()
+        }
+    }
+
+    // Collect EPG state from ViewModel
+    val epgByChannel by viewModel.epgByChannel.collectAsState()
 
     // Intercept back button: close player if active, or close search
     BackHandler {
@@ -329,77 +351,228 @@ fun SimplifiedScreen(
                     }
                 }
             } else {
-                // Main Split-Screen: Left (Groups) | Right (Channels)
-                Row(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    // LEFT COLUMN: GROUPS / CATEGORIES (30% - 35% width)
-                    Surface(
-                        modifier = Modifier
-                            .weight(0.32f)
-                            .fillMaxHeight(),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    val isWideScreen = maxWidth >= 720.dp
+                    val previewChannel = activeChannels.firstOrNull { it.id == previewChannelId }
+                        ?: activeChannels.firstOrNull { it.id == state.lastPlayedChannelId }
+                        ?: activeChannels.firstOrNull()
+
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                            Text(
-                                text = stringResource(R.string.groups).uppercase(),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                            )
+                        // LEFT COLUMN: GROUPS / CATEGORIES (22% on wide, 34% on mobile)
+                        Surface(
+                            modifier = Modifier
+                                .weight(if (isWideScreen) 0.22f else 0.34f)
+                                .fillMaxHeight(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                                Text(
+                                    text = stringResource(R.string.groups).uppercase(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
 
-                            LazyColumn(
-                                state = groupListState,
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                itemsIndexed(groupsList) { _, groupName ->
-                                    val isSelected = (groupName == state.selectedGroup)
-                                    val count = if (groupName == null) state.channels.size else (groupCounts[groupName] ?: 0)
-                                    val label = groupName ?: stringResource(R.string.simplified_all_channels)
+                                LazyColumn(
+                                    state = groupListState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    itemsIndexed(groupsList) { _, groupName ->
+                                        val isSelected = (groupName == state.selectedGroup)
+                                        val count = if (groupName == null) state.channels.size else (groupCounts[groupName] ?: 0)
+                                        val label = groupName ?: stringResource(R.string.simplified_all_channels)
 
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .tvFocusable(shape = RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                viewModel.selectGroup(groupName)
-                                            },
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .tvFocusable(shape = RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    viewModel.selectGroup(groupName)
+                                                },
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
                                         ) {
-                                            Text(
-                                                text = label,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                            Surface(
-                                                shape = RoundedCornerShape(8.dp),
-                                                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Text(
-                                                    text = count.toString(),
-                                                    style = MaterialTheme.typography.labelSmall,
+                                                    text = label,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
+                                                ) {
+                                                    Text(
+                                                        text = count.toString(),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // CENTER COLUMN: CHANNELS LIST (44% on wide, 66% on mobile)
+                        Surface(
+                            modifier = Modifier
+                                .weight(if (isWideScreen) 0.44f else 0.66f)
+                                .fillMaxHeight(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = (state.selectedGroup ?: stringResource(R.string.simplified_all_channels)).uppercase(),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.channels_count, activeChannels.size),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                LazyColumn(
+                                    state = channelListState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    itemsIndexed(activeChannels, key = { _, ch -> ch.id }) { index, channel ->
+                                        val isLastPlayed = channel.id == state.lastPlayedChannelId
+                                        val isPreviewSelected = isWideScreen && channel.id == previewChannel?.id
+                                        val (nowProg, _) = viewModel.getNowAndNext(channel, currentTimeMs)
+
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .onFocusChanged {
+                                                    if (it.isFocused) {
+                                                        previewChannelId = channel.id
+                                                    }
+                                                }
+                                                .tvFocusable(shape = RoundedCornerShape(14.dp))
+                                                .clickable {
+                                                    previewChannelId = channel.id
+                                                    viewModel.saveLastPlayedChannel(context, channel.id, state.selectedGroup)
+                                                    playerSession = PlayerSession(
+                                                        channels = activeChannels,
+                                                        index = index
+                                                    )
+                                                },
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = when {
+                                                isPreviewSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                                isLastPlayed -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                                else -> MaterialTheme.colorScheme.surface
+                                            },
+                                            border = when {
+                                                isPreviewSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                                                isLastPlayed -> BorderStroke(1.5.dp, TvFocusHighlightColor)
+                                                else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                            }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                // Channel Number
+                                                Text(
+                                                    text = "${index + 1}",
+                                                    style = MaterialTheme.typography.labelMedium,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    color = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.width(32.dp)
+                                                )
+
+                                                // Channel Name + Live Program info
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = channel.name,
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                        fontWeight = if (isLastPlayed || isPreviewSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+
+                                                    // EPG Now Playing Line
+                                                    if (nowProg != null) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                                            modifier = Modifier.padding(top = 2.dp)
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(7.dp)
+                                                                    .background(Color(0xFFE53935), CircleShape)
+                                                            )
+                                                            Text(
+                                                                text = "${nowProg.title} (${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)})",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = MaterialTheme.colorScheme.primary,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    } else if (state.selectedGroup == null && channel.groupTitle.isNotBlank()) {
+                                                        Text(
+                                                            text = channel.groupTitle,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+
+                                                // Play icon
+                                                Icon(
+                                                    imageVector = Icons.Filled.PlayArrow,
+                                                    contentDescription = stringResource(R.string.play),
+                                                    tint = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(24.dp)
                                                 )
                                             }
                                         }
@@ -407,107 +580,245 @@ fun SimplifiedScreen(
                                 }
                             }
                         }
-                    }
 
-                    // RIGHT COLUMN: CHANNELS (65% - 70% width)
-                    Surface(
-                        modifier = Modifier
-                            .weight(0.68f)
-                            .fillMaxHeight(),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                            Row(
+                        // RIGHT COLUMN: EPG TV GUIDE PREVIEW PANEL (34% width on wide screens / TV)
+                        if (isWideScreen && previewChannel != null) {
+                            val (nowProg, nextProg) = viewModel.getNowAndNext(previewChannel, currentTimeMs)
+                            val previewIndex = activeChannels.indexOfFirst { it.id == previewChannel.id }.coerceAtLeast(0)
+
+                            Surface(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .weight(0.34f)
+                                    .fillMaxHeight(),
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                             ) {
-                                Text(
-                                    text = (state.selectedGroup ?: stringResource(R.string.simplified_all_channels)).uppercase(),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = stringResource(R.string.channels_count, activeChannels.size),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            LazyColumn(
-                                state = channelListState,
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                itemsIndexed(activeChannels, key = { _, ch -> ch.id }) { index, channel ->
-                                    val isLastPlayed = channel.id == state.lastPlayedChannelId
-
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .tvFocusable(shape = RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                viewModel.saveLastPlayedChannel(context, channel.id, state.selectedGroup)
-                                                playerSession = PlayerSession(
-                                                    channels = activeChannels,
-                                                    index = index
-                                                )
-                                            },
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = if (isLastPlayed) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
-                                        border = if (isLastPlayed) BorderStroke(1.5.dp, TvFocusHighlightColor) else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    // Channel Header Card
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.size(42.dp)
                                         ) {
-                                            // Channel Number
-                                            Text(
-                                                text = "${index + 1}",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.width(36.dp)
-                                            )
-
-                                            // Channel Name
-                                            Column(modifier = Modifier.weight(1f)) {
+                                            Box(contentAlignment = Alignment.Center) {
                                                 Text(
-                                                    text = channel.name,
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    fontWeight = if (isLastPlayed) FontWeight.Bold else FontWeight.Medium,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    text = "${previewIndex + 1}",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                                 )
-                                                if (state.selectedGroup == null && channel.groupTitle.isNotBlank()) {
-                                                    Text(
-                                                        text = channel.groupTitle,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
+                                            }
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = previewChannel.name,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            if (previewChannel.groupTitle.isNotBlank()) {
+                                                Text(
+                                                    text = previewChannel.groupTitle,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                    // EPG Program Details
+                                    LazyColumn(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        // NOW PLAYING
+                                        item {
+                                            Surface(
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = MaterialTheme.colorScheme.surface,
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(8.dp)
+                                                                .background(Color(0xFFE53935), CircleShape)
+                                                        )
+                                                        Text(
+                                                            text = stringResource(R.string.epg_now_playing),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFFE53935)
+                                                        )
+                                                        if (nowProg != null) {
+                                                            Spacer(Modifier.weight(1f))
+                                                            Text(
+                                                                text = "${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)}",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    }
+
+                                                    if (nowProg != null) {
+                                                        Text(
+                                                            text = nowProg.title,
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+
+                                                        // Progress Bar
+                                                        val totalDuration = (nowProg.stopMs - nowProg.startMs).coerceAtLeast(1L)
+                                                        val elapsed = (currentTimeMs - nowProg.startMs).coerceIn(0L, totalDuration)
+                                                        val progress = elapsed.toFloat() / totalDuration.toFloat()
+
+                                                        LinearProgressIndicator(
+                                                            progress = { progress },
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .height(4.dp)
+                                                                .clip(RoundedCornerShape(2.dp)),
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                                        )
+
+                                                        if (nowProg.description.isNotBlank()) {
+                                                            Text(
+                                                                text = nowProg.description,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                maxLines = 4,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    } else {
+                                                        Text(
+                                                            text = stringResource(R.string.epg_no_info),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
                                                 }
                                             }
-
-                                            // Play icon / Last played badge
-                                            Icon(
-                                                imageVector = Icons.Filled.PlayArrow,
-                                                contentDescription = stringResource(R.string.play),
-                                                tint = if (isLastPlayed) TvFocusHighlightColor else MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(24.dp)
-                                            )
                                         }
+
+                                        // UP NEXT
+                                        item {
+                                            Surface(
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.SkipNext,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Text(
+                                                            text = stringResource(R.string.epg_up_next),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                        if (nextProg != null) {
+                                                            Spacer(Modifier.weight(1f))
+                                                            Text(
+                                                                text = "${formatEpgTime(nextProg.startMs)} - ${formatEpgTime(nextProg.stopMs)}",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    }
+
+                                                    if (nextProg != null) {
+                                                        Text(
+                                                            text = nextProg.title,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        if (nextProg.description.isNotBlank()) {
+                                                            Text(
+                                                                text = nextProg.description,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                maxLines = 3,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    } else {
+                                                        Text(
+                                                            text = stringResource(R.string.epg_no_info),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Big Play Button
+                                    Button(
+                                        onClick = {
+                                            viewModel.saveLastPlayedChannel(context, previewChannel.id, state.selectedGroup)
+                                            playerSession = PlayerSession(
+                                                channels = activeChannels,
+                                                index = previewIndex
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp)
+                                            .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.play_channel),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 }
                             }

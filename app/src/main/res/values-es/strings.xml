@@ -179,4 +179,10 @@
     <string name="parental_confirm_pin">Confirmar PIN</string>
     <string name="parental_pin_mismatch">Los códigos PIN no coinciden</string>
     <string name="parental_auto_lock_notice">Los ajustes se bloquearán automáticamente tras 10 segundos de inactividad</string>
+    <!-- TV Guide & EPG -->
+    <string name="epg_now_playing">EMITIÉNDOSE AHORA</string>
+    <string name="epg_up_next">A CONTINUACIÓN</string>
+    <string name="epg_no_info">Sin información de programación</string>
+    <string name="epg_guide_title">Guía de Televisión (EPG)</string>
+    <string name="play_channel">Reproducir Canal</string>
 </resources>

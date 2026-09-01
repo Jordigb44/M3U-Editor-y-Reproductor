@@ -5,5 +5,6 @@ data class EpgProgram(
     val channelId: String,
     val title: String,
     val startMs: Long,
-    val stopMs: Long
+    val stopMs: Long,
+    val description: String = ""
 )

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -47,6 +48,14 @@ import com.example.ui.components.ParentalPinDialog
 import com.example.ui.components.PlayChoiceDialog
 import com.example.ui.components.TvFocusHighlightColor
 import com.example.ui.components.dpadFocusable
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private fun formatEpgTime(timeMs: Long): String {
+    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return sdf.format(Date(timeMs))
+}
 
 /** Advanced search: matches channel name, group or stream URL (case-insensitive). */
 private fun Channel.matchesSearch(query: String): Boolean =
@@ -518,7 +527,32 @@ fun ChannelsTab(
                 val isSelected = state.selectedChannelIds.contains(channel.id)
                 ListItem(
                     headlineContent = { Text(channel.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium) },
-                    supportingContent = { Text(channel.groupTitle, style = MaterialTheme.typography.labelSmall) },
+                    supportingContent = {
+                        val (nowProg, _) = viewModel.getNowAndNext(channel)
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            if (nowProg != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(Color(0xFFE53935), CircleShape)
+                                    )
+                                    Text(
+                                        text = "${nowProg.title} (${formatEpgTime(nowProg.startMs)} - ${formatEpgTime(nowProg.stopMs)})",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Text(channel.groupTitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .dpadFocusable(shape = RoundedCornerShape(16.dp))

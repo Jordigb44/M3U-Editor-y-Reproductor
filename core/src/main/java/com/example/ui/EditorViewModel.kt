@@ -6,13 +6,17 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.Channel
+import com.example.data.EpgLoader
+import com.example.data.EpgProgram
 import com.example.data.M3uParser
 import com.example.data.ParsedM3u
 import com.example.data.SavedPlaylist
+import com.example.data.XmltvParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -100,6 +104,11 @@ class EditorViewModel : ViewModel() {
     private val _isParentalUnlocked = MutableStateFlow(false)
     private var parentalAutoLockJob: kotlinx.coroutines.Job? = null
 
+    private val _epgByChannel = MutableStateFlow<Map<String, List<EpgProgram>>>(emptyMap())
+    val epgByChannel: StateFlow<Map<String, List<EpgProgram>>> = _epgByChannel.asStateFlow()
+    private val _isEpgLoading = MutableStateFlow(false)
+    val isEpgLoading: StateFlow<Boolean> = _isEpgLoading.asStateFlow()
+
     /** Raw #EXTM3U header of the active playlist, preserved so exports keep playlist-level
      *  attributes (e.g. url-tvg / x-tvg-url). Not part of the UI state. */
     private var currentHeader: String = DEFAULT_HEADER
@@ -110,6 +119,39 @@ class EditorViewModel : ViewModel() {
         if (header.isBlank()) return null
         return Regex("(?:url-tvg|x-tvg-url|tvg-url)=\"([^\"]+)\"")
             .find(header)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+    }
+
+    fun loadEpgForActivePlaylist() {
+        val url = activeEpgUrl()
+        if (url.isNullOrBlank()) return
+        val channels = _channels.value
+        if (channels.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _isEpgLoading.value = true
+            try {
+                val wantedIds = (channels.mapNotNull { it.attributes["tvg-id"] } +
+                    channels.mapNotNull { it.attributes["tvg-name"] } +
+                    channels.map { it.name } +
+                    channels.map { it.id }).filter { it.isNotBlank() }.toSet()
+                val loaded = EpgLoader.load(url, wantedIds)
+                if (loaded != null) {
+                    _epgByChannel.value = loaded
+                }
+            } catch (_: Exception) {}
+            _isEpgLoading.value = false
+        }
+    }
+
+    fun getNowAndNext(channel: Channel, nowMs: Long = System.currentTimeMillis()): Pair<EpgProgram?, EpgProgram?> {
+        val epgMap = _epgByChannel.value
+        if (epgMap.isEmpty()) return null to null
+        val programs = XmltvParser.findProgramsForChannel(
+            epgMap,
+            channel.attributes["tvg-id"],
+            channel.attributes["tvg-name"],
+            channel.name
+        ) ?: epgMap[channel.id] ?: return null to null
+        return XmltvParser.nowAndNext(programs, nowMs)
     }
 
     private val client: OkHttpClient by lazy { createOkHttpClient() }
@@ -437,6 +479,7 @@ class EditorViewModel : ViewModel() {
 
                     val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
                     prefs.edit().putString("active_playlist_id", newPlaylist.id).apply()
+                    loadEpgForActivePlaylist()
                 } else {
                     _error.value = "No se encontraron canales válidos en el archivo."
                 }
@@ -497,6 +540,7 @@ class EditorViewModel : ViewModel() {
 
                     val prefs = context.getSharedPreferences("pepe_editor_playlists", Context.MODE_PRIVATE)
                     prefs.edit().putString("active_playlist_id", newPlaylist.id).apply()
+                    loadEpgForActivePlaylist()
                 } else {
                     _error.value = "No se encontraron canales válidos en la lista IPTV."
                 }
@@ -712,6 +756,7 @@ class EditorViewModel : ViewModel() {
                 _selectedGroups.value = emptySet()
 
                 prefs.edit().putString("active_playlist_id", playlistId).apply()
+                loadEpgForActivePlaylist()
             } catch (e: Exception) {
                 _error.value = "No se pudo cargar la lista guardada: ${e.localizedMessage ?: "archivo no válido"}"
             }

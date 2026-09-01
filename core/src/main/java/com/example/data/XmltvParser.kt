@@ -10,12 +10,15 @@ object XmltvParser {
 
     private val attrRe = Regex("(\\w+)=\"([^\"]*)\"")
     private val titleRe = Regex("<title(?:\\s[^>]*)?>(.*?)</title>")
+    private val descRe = Regex("<desc(?:\\s[^>]*)?>(.*?)</desc>")
 
     fun parse(input: InputStream, wantedChannelIds: Set<String>? = null): List<EpgProgram> {
         val programs = mutableListOf<EpgProgram>()
         var pendingChannel: String? = null
         var pendingStart: String? = null
         var pendingStop: String? = null
+        var pendingTitle: String? = null
+        var pendingDesc: String = ""
 
         input.bufferedReader(Charsets.UTF_8).useLines { lines ->
             for (line in lines) {
@@ -28,31 +31,58 @@ object XmltvParser {
                         pendingChannel = attrs["channel"]
                         pendingStart = attrs["start"]
                         pendingStop = attrs["stop"]
+                        pendingTitle = null
+                        pendingDesc = ""
                     }
                     pendingChannel != null && trimmed.startsWith("<title") -> {
-                        val title = titleRe.find(trimmed)?.groupValues?.get(1)?.trim().orEmpty()
+                        pendingTitle = titleRe.find(trimmed)?.groupValues?.get(1)?.trim().orEmpty()
+                    }
+                    pendingChannel != null && trimmed.startsWith("<desc") -> {
+                        pendingDesc = descRe.find(trimmed)?.groupValues?.get(1)?.trim().orEmpty()
+                    }
+                    trimmed.contains("</programme>") -> {
+                        val title = pendingTitle
                         val cid = pendingChannel
                         val s = pendingStart
                         val e = pendingStop
-                        if (title.isNotEmpty() && cid != null && s != null && e != null &&
+                        if (!title.isNullOrBlank() && cid != null && s != null && e != null &&
                             (wantedChannelIds == null || cid in wantedChannelIds)
                         ) {
                             val startMs = parseTime(s)
                             val stopMs = parseTime(e)
                             if (startMs != null && stopMs != null) {
-                                programs.add(EpgProgram(cid, title, startMs, stopMs))
+                                programs.add(EpgProgram(cid, title, startMs, stopMs, pendingDesc))
                             }
                         }
-                    }
-                    trimmed.contains("</programme>") -> {
                         pendingChannel = null
                         pendingStart = null
                         pendingStop = null
+                        pendingTitle = null
+                        pendingDesc = ""
                     }
                 }
             }
         }
         return programs
+    }
+
+    /** Helper to find matching programs for a channel by tvg-id, tvg-name, or channel name. */
+    fun findProgramsForChannel(
+        epgByChannel: Map<String, List<EpgProgram>>,
+        tvgId: String?,
+        tvgName: String?,
+        channelName: String?
+    ): List<EpgProgram>? {
+        if (!tvgId.isNullOrBlank() && epgByChannel.containsKey(tvgId)) {
+            return epgByChannel[tvgId]
+        }
+        if (!tvgName.isNullOrBlank() && epgByChannel.containsKey(tvgName)) {
+            return epgByChannel[tvgName]
+        }
+        if (!channelName.isNullOrBlank() && epgByChannel.containsKey(channelName)) {
+            return epgByChannel[channelName]
+        }
+        return null
     }
 
     /** Parses "20260829140000 +0200" (or without offset) into epoch millis. */
