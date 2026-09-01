@@ -149,23 +149,30 @@ fun SimplifiedScreen(
         }
     }
 
-    // Restore scroll position to last played channel on first composition or group change
-    LaunchedEffect(state.selectedGroup, state.lastPlayedChannelId) {
-        val lastId = state.lastPlayedChannelId
-        if (!lastId.isNullOrBlank() && activeChannels.isNotEmpty()) {
-            val targetIndex = activeChannels.indexOfFirst { it.id == lastId }
-            if (targetIndex >= 0) {
-                channelListState.scrollToItem((targetIndex - 1).coerceAtLeast(0))
+    // Restore scroll position initially on startup
+    var hasInitialScrolled by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.isPreferencesLoaded, state.channels) {
+        if (!hasInitialScrolled && state.isPreferencesLoaded && state.channels.isNotEmpty()) {
+            hasInitialScrolled = true
+            val currentGroup = state.selectedGroup
+            val groupIndex = groupsList.indexOf(currentGroup)
+            if (groupIndex >= 0) {
+                groupListState.scrollToItem((groupIndex - 1).coerceAtLeast(0))
+            }
+            val lastId = state.lastPlayedChannelId
+            if (!lastId.isNullOrBlank() && activeChannels.isNotEmpty()) {
+                val targetIndex = activeChannels.indexOfFirst { it.id == lastId }
+                if (targetIndex >= 0) {
+                    channelListState.scrollToItem((targetIndex - 1).coerceAtLeast(0))
+                }
             }
         }
     }
 
-    // Restore scroll position in groups list
+    // When user explicitly selects a different group, reset channel list to top
     LaunchedEffect(state.selectedGroup) {
-        val currentGroup = state.selectedGroup
-        val groupIndex = groupsList.indexOf(currentGroup)
-        if (groupIndex >= 0) {
-            groupListState.scrollToItem((groupIndex - 1).coerceAtLeast(0))
+        if (hasInitialScrolled) {
+            channelListState.scrollToItem(0)
         }
     }
 
@@ -457,10 +464,7 @@ fun SimplifiedScreen(
                                                 .fillMaxWidth()
                                                 .tvFocusable(
                                                     shape = RoundedCornerShape(12.dp),
-                                                    onClick = { viewModel.selectGroup(groupName) },
-                                                    onFocusChange = { focused ->
-                                                        if (focused) viewModel.selectGroup(groupName)
-                                                    }
+                                                    onClick = { viewModel.selectGroup(groupName) }
                                                 ),
                                             shape = RoundedCornerShape(12.dp),
                                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
